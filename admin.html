@@ -52,17 +52,49 @@ const byName=(a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.locale
 
 /* 入力ダイアログ(いろいろな種類の入力欄に対応) */
 function ask(t,fs){return new Promise(r=>{const d=document.createElement('dialog');
-  const fld=f=>f.t=='who'?who(f.v):f.t=='color'?`<label>色</label><div class=sw>${COLORS.map(c=>`<label><input type=radio name=color value="${c}" ${c==(f.v||COLORS[0])?'checked':''}><span style="background:${c}"></span></label>`).join('')}</div>`
+  const fld=f=>f.t=='acc'?acc(f):f.t=='color'?`<label>色</label><div class=sw>${COLORS.map(c=>`<label><input type=radio name=color value="${c}" ${c==(f.v||COLORS[0])?'checked':''}><span style="background:${c}"></span></label>`).join('')}</div>`
     :f.t=='chk'?`<label class=rl><input type=checkbox name=${f.n}>${f.l}</label>`
     :f.t=='sel'?`<label>${f.l}</label><select name=${f.n}>${f.opts.map(o=>`<option value="${o.id}" ${o.id==f.v?'selected':''}>${e(o.label)}</option>`).join('')}</select>`
     :`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=${f.r||5}>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`);
   d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(fld).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
   document.body.append(d);d.showModal();
-  d.onclose=()=>{const o={};if(d.returnValue=='ok'){const fd=new FormData(d.querySelector('form'));fd.forEach((v,k)=>o[k]=v);o.to=fd.get('scope')=='sel'?fd.getAll('to'):['all']}r(d.returnValue=='ok'?o:null);d.remove()}})}
-function who(v=['all']){const all=v.includes('all');
-  return `<label>公開範囲</label><label class=rl><input type=radio name=scope value=all ${all?'checked':''}>全員</label><label class=rl><input type=radio name=scope value=sel ${all?'':'checked'}>選んだ人だけ</label>
-  <div class=who>${users.map(u=>`<label class=rl><input type=checkbox name=to value="${u.id}" ${!all&&v.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')||'<span class=s>登録ユーザーがいません</span>'}</div>`}
-const scopeTxt=x=>!x.to||x.to.includes('all')?'全員':x.to.length+'人';
+  d.onclose=()=>{const o={};if(d.returnValue=='ok'){const fd=new FormData(d.querySelector('form'));fd.forEach((v,k)=>o[k]=v);Object.assign(o,accRes(fd,d))}r(d.returnValue=='ok'?o:null);d.remove()}})}
+function acc(f){
+  const v=f.v||{to:['all'],pv:[]},t=v.to||['all'],p=v.pv||[];
+  const lvOf=id=>t.includes('all')||t.includes(id)?'v':p.includes('all')||p.includes(id)?'p':'n';
+  const bk=t.includes('all')?'v':p.includes('all')?'p':'';
+  const L=f.nopv?[['v','見れる'],['n','見れない']]:[['v','見れる'],['p','プレビュー(モザイク+リクエスト)'],['n','見れない']];
+  const sel=(name,cur,extra,on,cls)=>`<select name=${name} class="${cls}" onchange="${on}" style="margin:0;width:auto;padding:8px">${extra||''}${L.map(o=>`<option value=${o[0]} ${cur==o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`;
+  return `<label>公開範囲</label><div class=row style="margin-bottom:8px"><span class=s>全員まとめて:</span>${sel('bulk',bk,`<option value="" ${bk?'':'selected'}>個別に設定</option>`,"document.querySelectorAll('.lvs').forEach(s=>{if(this.value)s.value=this.value})",'')}</div>
+  <div class=who>${users.map(u=>`<div class=row style="justify-content:space-between;margin:4px 0"><span style="font-size:14px">${e(u.last+' '+u.first)} (${e(u.sid)})</span>${sel('lv_'+u.id,lvOf(u.id),'',"this.form.elements.bulk.value=''",'lvs')}</div>`).join('')||'<span class=s>登録ユーザーがいません</span>'}</div>
+  <p class=s>「全員まとめて」を選ぶと、今後登録する人にも同じ設定が使われます。${f.nopv?'':'プレビューの人には、ファイルがモザイクと鍵マークで表示され、閲覧リクエストを送れます。'}</p>`}
+function accRes(fd,d){
+  if(!d.querySelector('[name=bulk]'))return {};
+  let bk=fd.get('bulk');const ids=users.map(u=>u.id),lv={};ids.forEach(i=>lv[i]=fd.get('lv_'+i));
+  if(!bk&&ids.length&&ids.every(i=>lv[i]==lv[ids[0]]))bk=lv[ids[0]];
+  return bk?{to:bk=='v'?['all']:[],pv:bk=='p'?['all']:[]}:{to:ids.filter(i=>lv[i]=='v'),pv:ids.filter(i=>lv[i]=='p')};
+}
+const lvTxt=x=>{const f=a=>a.includes('all')?'全員':a.length+'人',t=x.to||['all'],p=x.pv||[];return '見れる: '+f(t)+(x.type!='folder'&&p.length?' / プレビュー: '+f(p):'')};
+/* PDFの1ページ目を粗いモザイクにした画像を作る(プレビュー用。文字は読めません) */
+async function mkPreview(id,b64){
+  await loadLib('pdfjs');
+  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(b64),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
+  const pg=await pdf.getPage(1),v=pg.getViewport({scale:1}),vp=pg.getViewport({scale:600/v.width});
+  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+  await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  const s=document.createElement('canvas'),n=24;s.width=n;s.height=Math.max(1,Math.round(n*vp.height/vp.width));
+  s.getContext('2d').drawImage(c,0,0,s.width,s.height);
+  const o=document.createElement('canvas');o.width=300;o.height=Math.round(300*vp.height/vp.width);
+  const x=o.getContext('2d');x.imageSmoothingEnabled=false;x.drawImage(s,0,0,o.width,o.height);
+  await db.doc('previews/'+id).set({img:o.toDataURL('image/jpeg',.7)});
+}
+async function genMissing(){ // まだプレビュー画像がないPDFを、裏で自動的に作る
+  if(genMissing.on)return;genMissing.on=true;
+  try{for(const x of items.filter(i=>i.type=='pdf'&&!i.pvImg)){
+    const s=await db.doc('blobs/'+x.id).get();if(!s.exists)continue;
+    await mkPreview(x.id,s.data().d);await db.doc('items/'+x.id).update({pvImg:true});x.pvImg=true}}catch(x){}
+  genMissing.on=false;
+}
 const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
 
 function loginView(m=''){show(`<div class=auth><div class=box><h1 class=lg>管理者ログイン</h1>
@@ -89,9 +121,10 @@ async function shelf(){
   $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">戻る</button>':''}<h2 style=margin:0>${path.length?e(f?.name):'本棚'}</h2></div>
   <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div><div id=busy></div>`+
   (list.map(x=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}"></span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
-   <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / 公開: ${scopeTxt(x)}</div>
+   <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / ${lvTxt(x)}</div>
    <div class=row style=margin-top:8px>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
    <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b g" onclick="cp('${x.id}')">コピー</button><button class="b g" onclick="mv('${x.id}')">移動</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
+  genMissing();
 }
 function folderOpts(excl){ // 「ホーム / A / B」の形で、選べるフォルダ一覧を作る(自分自身とその中は除く)
   const out=[{id:'',label:'ホーム'}];
@@ -103,15 +136,17 @@ async function mk(type){
   if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
   fs.push({l:'名前',n:'nm',v:'',a:'required'});
   if(type=='folder')fs.push({t:'color',v:COLORS[0]});
-  fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'who',v:['all']});
+  fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'acc',v:{to:['all'],pv:[]},nopv:type=='folder'});
   const o=await ask({folder:'フォルダを作る',pdf:'PDFをアップロード',text:'テキストを作る'}[type],fs);if(!o)return;
-  if(!o.to.length)return alert('公開する人を選んでください');
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
   const ref=db.collection('items').doc(),b=db.batch();
-  if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+ref.id),{d:await rd(o.file)})}
-  const d={parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()};
+  let b64='';
+  if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b64=await rd(o.file);b.set(db.doc('blobs/'+ref.id),{d:b64})}
+  const d={parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,pv:o.pv||[],version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()};
   if(type=='folder')d.color=o.color;
-  b.set(ref,d);await b.commit();shelf();
+  b.set(ref,d);await b.commit();
+  if(type=='pdf')try{await mkPreview(ref.id,b64);await db.doc('items/'+ref.id).update({pvImg:true})}catch(x){}
+  shelf();
 }
 const subtree=id=>items.filter(x=>x.parent==id).flatMap(x=>[x.id,...subtree(x.id)]);
 async function upd(id,ver){
@@ -119,24 +154,26 @@ async function upd(id,ver){
   if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
   fs.push({l:'名前',n:'nm',v:it.name,a:'required'});
   if(it.type=='folder')fs.push({t:'color',v:it.color});
-  fs.push({l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'who',v:it.to||['all']});
+  fs.push({l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'acc',v:{to:it.to||['all'],pv:it.pv||[]},nopv:it.type=='folder'});
   if(it.type=='folder')fs.push({t:'chk',n:'apply',l:'この公開範囲を、フォルダの中身すべてにも適用する'});
   if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});
   const o=await ask(ver?`新バージョン(v${it.version+1})`:'編集',fs);if(!o)return;
-  if(!o.to.length)return alert('公開する人を選んでください');
-  const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,to:o.to};
+  let nb='';const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,to:o.to,pv:o.pv||[]};
   if(it.type=='folder')u.color=o.color;
   if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
-    if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+id),{d:await rd(o.file)})}}
+    if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');nb=await rd(o.file);b.set(db.doc('blobs/'+id),{d:nb})}}
   b.update(db.doc('items/'+id),u);
-  if(o.apply)subtree(id).forEach(c=>b.update(db.doc('items/'+c),{to:o.to}));
-  await b.commit();shelf();
+  if(o.apply)subtree(id).forEach(c=>b.update(db.doc('items/'+c),{to:o.to,pv:[]}));
+  await b.commit();
+  if(nb)try{await mkPreview(id,nb);await db.doc('items/'+id).update({pvImg:true})}catch(x){}
+  shelf();
 }
 async function copyTree(id,dest,nm){
   const it=items.find(x=>x.id==id),ref=db.collection('items').doc(),d={...it};delete d.id;
   Object.assign(d,{parent:dest,name:nm??it.name,version:1,history:[{v:1,at:Date.now(),note:'コピー'}],createdAt:Date.now()});
-  const b=db.batch();b.set(ref,d);
-  if(it.type=='pdf'){const s=await db.doc('blobs/'+id).get();if(s.exists)b.set(db.doc('blobs/'+ref.id),s.data())}
+  const b=db.batch();
+  if(it.type=='pdf'){const s=await db.doc('blobs/'+id).get();if(s.exists)b.set(db.doc('blobs/'+ref.id),s.data());const ps=await db.doc('previews/'+id).get();if(ps.exists)b.set(db.doc('previews/'+ref.id),ps.data());d.pvImg=ps.exists}
+  b.set(ref,d);
   await b.commit();
   if(it.type=='folder')for(const c of items.filter(x=>x.parent==id))await copyTree(c.id,ref.id);
 }
@@ -158,7 +195,7 @@ async function del(id){
   const it=items.find(x=>x.id==id);
   if(items.some(x=>x.parent==id))return alert('中身が残っています。先に中身を削除してください。');
   if(!confirm(`「${it.name}」を削除しますか?`))return;
-  await db.doc('items/'+id).delete();if(it.type=='pdf')await db.doc('blobs/'+id).delete();shelf();
+  await db.doc('items/'+id).delete();if(it.type=='pdf'){await db.doc('blobs/'+id).delete();await db.doc('previews/'+id).delete()}shelf();
 }
 async function vw(id){
   const it=items.find(x=>x.id==id),d=document.createElement('dialog');d.style.width='min(900px,96vw)';
@@ -175,8 +212,8 @@ async function lg(id){
 
 /* ---------- お知らせ ---------- */
 function subBar(){return `<div class=row style=margin-bottom:10px>${[['send','送付'],['hist','送付済み'],['inbox','受信']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
-const FL=[['all','すべて'],['contact','連絡・相談'],['reset','パスワード再設定'],['signup','新規登録'],['withdraw','退会']];
-const TN={signup:'新規登録',contact:'連絡・相談',withdraw:'退会',reset:'パスワード再設定の申請',reset_done:'パスワード再設定の完了'};
+const FL=[['all','すべて'],['access','閲覧リクエスト'],['contact','連絡・相談'],['reset','パスワード再設定'],['signup','新規登録'],['withdraw','退会']];
+const TN={access:'閲覧リクエスト',signup:'新規登録',contact:'連絡・相談',withdraw:'退会',reset:'パスワード再設定の申請',reset_done:'パスワード再設定の完了'};
 async function news(pre){
   users=await col('users');
   if(sub=='send')return compose(pre);
@@ -187,20 +224,22 @@ async function news(pre){
      <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
-  const all=(await col('inbox')).sort((a,b)=>b.at-a.at);RS=await col('resets');
+  const rq=(await col('requests')).map(r=>({...r,type:'access',uid:r.pid}));
+  const all=[...(await col('inbox')),...rq].sort((a,b)=>b.at-a.at);RS=await col('resets');
   const l=all.filter(x=>flt=='all'||x.type==flt||(flt=='reset'&&x.type=='reset_done'));window._i=l;
-  const pend=all.filter(x=>x.type=='reset').length;
-  $('#m').innerHTML=subBar()+`<div class=row style=margin-bottom:6px>${FL.map(f=>`<button class="b ${flt==f[0]?'on2':'g'}" onclick="flt='${f[0]}';news()">${f[1]}${f[0]=='reset'&&pend?` (${pend})`:''}</button>`).join('')}</div>`+
+  const pend=all.filter(x=>x.type=='reset').length,pendA=rq.filter(x=>x.status=='pending').length;
+  $('#m').innerHTML=subBar()+`<div class=row style=margin-bottom:6px>${FL.map(f=>`<button class="b ${flt==f[0]?'on2':'g'}" onclick="flt='${f[0]}';news()">${f[1]}${f[0]=='reset'&&pend?` (${pend})`:f[0]=='access'&&pendA?` (${pendA})`:''}</button>`).join('')}</div>`+
   (l.map((x,i)=>{
     const u=users.find(z=>z.id==x.uid||(x.sid&&(z.sid||'').toLowerCase()==x.sid.toLowerCase()));
     const nm=x.name||(u?u.last+' '+u.first:'(未登録の学籍番号)');
     const codes=x.type=='reset'?RS.filter(r=>r.sid==x.sid.toLowerCase()):[];
-    return `<div class="card ${x.wantReply||x.type=='reset'?'hl':''}"><span class=tag>${TN[x.type]}</span><b>${e(nm)}</b> (${e(x.sid||'')}) <span class=s>${fmt(x.at)}</span>
+    return `<div class="card ${x.wantReply||x.type=='reset'||(x.type=='access'&&x.status=='pending')?'hl':''}"><span class=tag>${TN[x.type]}</span><b>${e(nm)}</b> (${e(x.sid||'')}) <span class=s>${fmt(x.at)}</span>
    ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`
     :x.type=='reset'?`<div class=s>メモ: ${e(x.note||'なし')}</div>${codes.map(r=>`<div style="margin-top:6px">発行済みコード: <b style="font-size:18px;letter-spacing:2px">${e(r.code)}</b> <span class=s>(${fmt(r.exp)}まで)</span></div>`).join('')}`
+    :x.type=='access'?`<div class=s>ファイル: <b>${e(x.itemName)}</b> / ${x.status=='pending'?'<b style=color:#b91c1c>承認待ち</b>':x.status=='approved'?'承認済み':'見送り'}</div>${x.note?`<div class=s>メモ: ${e(x.note)}</div>`:''}`
     :x.type=='reset_done'?`<div class=s>新しいパスワードが設定されました</div>`
     :`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div>${x.subject?`<div><b>${e(x.subject)}</b></div>`:''}<div style="white-space:pre-wrap">${e(x.body)}</div>`}
-   <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}${x.type=='reset'?`<button class=b onclick="issue(${i})">${codes.length?'コードを再発行':'コードを発行'}</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`}).join('')||'<p class=s>受信はありません</p>');
+   <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}${x.type=='access'&&x.status=='pending'?`<button class=b onclick="apv(${i},true)">承認</button><button class="b r" onclick="apv(${i},false)">見送り</button>`:''}${x.type=='reset'?`<button class=b onclick="issue(${i})">${codes.length?'コードを再発行':'コードを発行'}</button>`:''}<button class="b g" onclick="delI('${x.id}','${x.type=='access'?'requests':'inbox'}')">削除</button></div></div>`}).join('')||'<p class=s>受信はありません</p>');
 }
 async function issue(i){
   const x=_i[i],sk=x.sid.toLowerCase(),u=users.find(z=>(z.sid||'').toLowerCase()==sk);
@@ -215,7 +254,18 @@ async function issue(i){
 }
 function reply(i){const x=_i[i];sub='send';news({to:[x.uid],genre:'メッセージ',subject:'Re: '+(x.subject||x.category),body:''})}
 async function delN(id){if(confirm('削除しますか?')){await db.doc('notices/'+id).delete();news()}}
-async function delI(id){if(confirm('削除しますか?')){await db.doc('inbox/'+id).delete();news()}}
+async function delI(id,c='inbox'){if(confirm('削除しますか?')){await db.doc(c+'/'+id).delete();news()}}
+// 閲覧リクエストの承認・見送り(承認すると、その人は「見れる」になり、お知らせも自動で届く)
+async function apv(i,ok){
+  const x=_i[i],b=db.batch();
+  if(ok){
+    const s=await db.doc('items/'+x.itemId).get();if(!s.exists)return alert('ファイルが見つかりません(削除された可能性があります)');
+    if(!(s.data().to||[]).includes('all'))b.update(db.doc('items/'+x.itemId),{to:firebase.firestore.FieldValue.arrayUnion(x.uid),pv:firebase.firestore.FieldValue.arrayRemove(x.uid)});
+    b.set(db.collection('notices').doc(),{subject:'閲覧が承認されました',genre:'メッセージ',body:`「${x.itemName}」を見られるようになりました。本棚から開いてください。`,to:[x.uid],createdAt:Date.now()});
+  }else if(!confirm('このリクエストを見送りますか?'))return;
+  b.update(db.doc('requests/'+x.id),{status:ok?'approved':'denied',decidedAt:Date.now()});
+  await b.commit();news();
+}
 function compose(p={}){
   const to=p.to||[],all=to.includes('all');
   $('#m').innerHTML=subBar()+`<div class=card><h3>${p.id?'お知らせを編集':'お知らせを送付'}</h3>

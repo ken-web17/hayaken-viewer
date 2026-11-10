@@ -38,6 +38,10 @@ dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}
 .ver{text-align:center;color:#94a3b8;font-size:12px;margin:26px 0 0;line-height:1.7}
 #pv canvas{width:100%;display:block;margin:8px 0;border:1px solid #cbd5e1;background:#fff}
 .subt{margin:-6px 0 10px;color:#475569;font-size:15px;white-space:pre-wrap}
+.lk{flex:none;width:22px}.lk svg{width:22px;fill:#b45309}
+.lockbox{position:relative;border-radius:14px;overflow:hidden;background:#e2e8f0;margin:12px 0;min-height:220px}.lockbox img{width:100%;display:block}
+.fake{height:300px;background:repeating-linear-gradient(#cbd5e1 0 10px,#e2e8f0 10px 26px)}
+.lkov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#0f172a99;color:#fff;text-align:center;padding:16px}.lkov svg{width:60px;fill:#fff}
 .nosel{user-select:none;-webkit-user-select:none}
 dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::backdrop{background:#0008}
 @media print{body{display:none!important}}
@@ -190,19 +194,21 @@ const FOLDER='<svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0
 const icon=it=>{if(it.type!='folder')return `<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;const c=it.color||'#d97706';return `<span class="ic f" style="background:${c}22">${FOLDER.replace('<svg','<svg style="fill:'+c+'"')}</span>`};
 function meta(it){const d=days(it.expiry);
   return `<div class=s>${it.type=='folder'?'フォルダ':it.type=='pdf'?'PDF':'テキスト'} / v${it.version} / 有効期限: ${it.expiry||'なし'}${d!==null?` <span class="${d<=7?'red':''}">(あと${d}日)</span>`:''}</div>`}
-const own=x=>!x.to||x.to.includes('all')||x.to.includes(PID);
+const lvl=x=>(!x.to||x.to.includes('all')||x.to.includes(PID))?'v':(x.pv&&(x.pv.includes('all')||x.pv.includes(PID)))?'p':'n'; // v=見れる p=プレビュー n=見れない
 // フォルダは、自分が見られる中身が1つでもあれば表示される(中身だけ見られて入れない、を防ぐ)
-const visible=x=>own(x)||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
+const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
 async function shelf(){
   if(cur)return openFile(cur);
   items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
   const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
   $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">戻る</button><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:'<h2>本棚</h2>')+
-   (list.map(x=>`<div class=it onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}">${icon(x)}<div><b>${e(x.name)}</b>${meta(x)}</div></div>`).join('')||'<p class=s>まだ何もありません</p>');
+   (list.map(x=>`<div class=it onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}">${icon(x)}<div style="flex:1"><b>${e(x.name)}</b>${meta(x)}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ(閲覧はリクエストが必要)</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`).join('')||'<p class=s>まだ何もありません</p>');
 }
 async function openFile(id){
   const it=items.find(x=>x.id==id);
+  if(lvl(it)=='p')return openLocked(it);
+  if(lvl(it)=='n'){cur=null;return shelf()}
   db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
   $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
    ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button>':''}
@@ -211,6 +217,25 @@ async function openFile(id){
    <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} / ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
   if(it.type!='pdf')return;
   try{await renderPdf(id,$('#pv'))}catch(x){$('#pv').innerHTML='<p class=err>表示できませんでした: '+e(x.message||x)+'</p>'}
+}
+/* ---- プレビューのみのファイル(モザイク+鍵+リクエスト) ---- */
+const LOCK='<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>';
+async function openLocked(it){
+  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${meta(it)}
+   <div class="lockbox nosel" oncontextmenu="return false"><div id=lkimg><div class=fake></div></div><div class=lkov>${LOCK}<b style="font-size:18px">プレビュー</b><span>このファイルを見るには、管理者の承認が必要です</span></div></div><div id=rq></div>`;
+  if(it.type=='pdf'&&it.pvImg){try{const s=await db.doc('previews/'+it.id).get();if(s.exists)$('#lkimg').innerHTML=`<img src="${s.data().img}" draggable=false>`}catch(x){}}
+  lockedState(it);
+}
+async function lockedState(it){
+  let r=null;try{const s=await db.doc('requests/'+PID+'_'+it.id).get();if(s.exists)r=s.data()}catch(x){}
+  $('#rq').innerHTML=r&&r.status=='pending'
+    ?`<div class=card>リクエスト済みです(${fmt(r.at)})。管理者の承認をお待ちください。承認されると、お知らせでお伝えします。</div>`
+    :`${r&&r.status=='denied'?'<p class=s>前回のリクエストは見送られました。</p>':''}<label>管理者へのメモ(任意)</label><input id=rqn placeholder="例:授業で使いたいです"><button class="b big" onclick="reqAccess('${it.id}')">閲覧をリクエストする</button>`;
+}
+async function reqAccess(id){
+  const it=items.find(x=>x.id==id);
+  try{await db.doc('requests/'+PID+'_'+id).set({pid:PID,itemId:id,itemName:it.name,name:P.last+' '+P.first,sid:P.sid,note:$v('#rqn'),status:'pending',at:Date.now()});lockedState(it)}
+  catch(x){alert('送信できませんでした。しばらくしてからもう一度お試しください')}
 }
 // 名前とシリアルコードを入れた新しいPDFを作り、別タブで開く(ダウンロード・印刷はそのタブのボタンから)
 async function dl(){
