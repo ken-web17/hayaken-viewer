@@ -24,6 +24,20 @@ button.g{background:#9ca3af;color:#111}button.r{background:#b91c1c}button.on2{ba
 <script src="firebase-config.js"></script>
 <script>
 window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#b91c1c;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js が同じ場所にあるか、設定値を貼ったか確認してください)</pre>');
+const PB='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function loadPdfJs(){return new Promise((ok,ng)=>{if(window.pdfjsLib)return ok();const s=document.createElement('script');
+  s.src=PB+'pdf.min.js';
+  s.onload=async()=>{try{const t=await(await fetch(PB+'pdf.worker.min.js')).text();pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'text/javascript'}))}catch(x){pdfjsLib.GlobalWorkerOptions.workerSrc=PB+'pdf.worker.min.js'}ok()};
+  s.onerror=()=>ng(new Error('pdf.js を読み込めません(ネットワークや拡張機能を確認)'));document.head.append(s)})}
+async function renderPdf(id,box){
+  await loadPdfJs();
+  const s=await db.doc('blobs/'+id).get();
+  if(!s.exists)throw new Error('PDFデータが見つかりません。管理者サイトで再アップロードしてください');
+  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(s.data().d),c=>c.charCodeAt(0)),cMapUrl:PB+'cmaps/',cMapPacked:true}).promise;
+  box.innerHTML='';
+  for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.6}),c=document.createElement('canvas');
+    c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;box.append(c)}
+}
 const auth=firebase.auth(),db=firebase.firestore();
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -60,7 +74,7 @@ async function shelf(){
   <div class=row><button class=b onclick="mk('folder')">＋フォルダ</button><button class=b onclick="mk('pdf')">＋PDFアップロード</button><button class=b onclick="mk('text')">＋テキスト</button></div>`+
   (list.map(x=>`<div class=card><b>${x.type=='folder'?'📁':x.type=='pdf'?'📄':'📝'} ${e(x.name)}</b>
    <div class=s>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'} ｜ v${x.version} ｜ 有効期限: ${x.expiry||'なし'}</div>
-   <div class=row>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
+   <div class=row>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">📖 開く</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
    <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
 }
 async function mk(type){
@@ -90,6 +104,13 @@ async function del(id){
   if(items.some(x=>x.parent==id))return alert('中身が残っています。先に中身を削除してください。');
   if(!confirm(`「${it.name}」を削除しますか?`))return;
   await db.doc('items/'+id).delete();if(it.type=='pdf')await db.doc('blobs/'+id).delete();shelf();
+}
+async function vw(id){
+  const it=items.find(x=>x.id==id),d=document.createElement('dialog');d.style.width='min(900px,96vw)';
+  d.innerHTML=`<h3>${e(it.name)}</h3><div class=s>v${it.version} ｜ 有効期限: ${e(it.expiry||'なし')}</div><div id=vb>${it.type=='pdf'?'読み込み中…':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
+  ${it.type=='pdf'?`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`:''}<p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  document.body.append(d);d.showModal();
+  if(it.type=='pdf'){const b=d.querySelector('#vb');try{await renderPdf(id,b);b.querySelectorAll('canvas').forEach(c=>c.style.cssText='width:100%;display:block;margin:6px 0;border:1px solid #999')}catch(x){b.innerHTML='<p style=color:#b91c1c>表示できませんでした: '+e(x.message||x)+'</p>'}}
 }
 async function lg(id){
   const l=(await col('logs')).filter(x=>x.itemId==id).sort((a,b)=>b.at-a.at);
