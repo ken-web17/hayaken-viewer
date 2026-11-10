@@ -1,5 +1,5 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='2.2.0',APP_DATE='2026-11-10';
+const APP_VERSION='2.3.0',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
@@ -34,7 +34,7 @@ async function loadLib(k){
   }
   throw new Error('必要な部品を読み込めません。ネットワークや拡張機能のブロックを確認してください');
 }
-async function renderPdf(id,box){
+async function renderPdf(id,box,wm){
   await loadLib('pdfjs');
   const s=await db.doc('blobs/'+id).get();
   if(!s.exists)throw new Error('PDFデータが見つかりません。管理者サイトで再アップロードしてください');
@@ -43,6 +43,8 @@ async function renderPdf(id,box){
   for(let i=1;i<=PDFDOC.numPages;i++){
     const pg=await PDFDOC.getPage(i),vp=pg.getViewport({scale:1.6}),c=document.createElement('canvas');
     c.width=vp.width;c.height=vp.height;
-    await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;box.append(c);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    if(wm){const x=c.getContext('2d');x.font=Math.round(vp.width/55)+'px sans-serif';x.fillStyle='rgba(0,0,0,.5)';x.textAlign='center';x.fillText(wm,vp.width/2,vp.height*0.985)} // 画面でも透かしを入れる
+    const w=document.createElement('div');w.className='pg';w.append(c);box.append(w);
   }
 }

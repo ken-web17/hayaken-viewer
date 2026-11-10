@@ -29,7 +29,7 @@ input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
 .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:2px 7px;background:#4b5563;color:#fff;margin-right:6px}
 .ver{text-align:center;color:#6b7280;font-size:12px;margin:26px 0 0;line-height:1.7}
 .sw{margin-bottom:10px}.sw input{display:none}.sw span{display:inline-block;width:30px;height:30px;border-radius:50%;margin:4px;border:3px solid transparent;cursor:pointer}.sw input:checked+span{border-color:#111}
-.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}
+.dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;font-weight:800;margin-right:6px;vertical-align:middle}
 dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
 </style></head><body>
 <div id="app"></div>
@@ -79,20 +79,21 @@ const lvTxt=x=>{const f=a=>a.includes('all')?'全員':a.length+'人',t=x.to||['a
 async function mkPreview(id,b64){
   await loadLib('pdfjs');
   const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(b64),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
-  const pg=await pdf.getPage(1),v=pg.getViewport({scale:1}),vp=pg.getViewport({scale:600/v.width});
+  const pg=await pdf.getPage(1),v=pg.getViewport({scale:1}),vp=pg.getViewport({scale:420/v.width});
   const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
   await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
-  const s=document.createElement('canvas'),n=24;s.width=n;s.height=Math.max(1,Math.round(n*vp.height/vp.width));
-  s.getContext('2d').drawImage(c,0,0,s.width,s.height);
-  const o=document.createElement('canvas');o.width=300;o.height=Math.round(300*vp.height/vp.width);
-  const x=o.getContext('2d');x.imageSmoothingEnabled=false;x.drawImage(s,0,0,o.width,o.height);
+  const W=300,H=Math.round(W*vp.height/vp.width),o=document.createElement('canvas');o.width=W;o.height=H;
+  const x=o.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  if('filter' in x){x.filter='blur(10px)';x.drawImage(c,0,0,W,H)}              // やわらかいぼかし
+  else{const s=document.createElement('canvas');s.width=24;s.height=Math.max(1,Math.round(24*H/W));s.getContext('2d').drawImage(c,0,0,s.width,s.height);x.imageSmoothingQuality='high';x.drawImage(s,0,0,W,H)}
   await db.doc('previews/'+id).set({img:o.toDataURL('image/jpeg',.7)});
+  await db.doc('items/'+id).update({pvImg:true,pvStyle:'blur'});
 }
-async function genMissing(){ // まだプレビュー画像がないPDFを、裏で自動的に作る
+async function genMissing(){ // プレビュー画像がない・古い形式のPDFを、裏で自動的に作り直す
   if(genMissing.on)return;genMissing.on=true;
-  try{for(const x of items.filter(i=>i.type=='pdf'&&!i.pvImg)){
+  try{for(const x of items.filter(i=>i.type=='pdf'&&(!i.pvImg||i.pvStyle!='blur'))){
     const s=await db.doc('blobs/'+x.id).get();if(!s.exists)continue;
-    await mkPreview(x.id,s.data().d);await db.doc('items/'+x.id).update({pvImg:true});x.pvImg=true}}catch(x){}
+    await mkPreview(x.id,s.data().d);x.pvImg=true;x.pvStyle='blur'}}catch(x){}
   genMissing.on=false;
 }
 const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
@@ -120,7 +121,7 @@ async function shelf(){
   const list=items.filter(x=>x.parent==cur).sort(byName);
   $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">戻る</button>':''}<h2 style=margin:0>${path.length?e(f?.name):'本棚'}</h2></div>
   <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div><div id=busy></div>`+
-  (list.map(x=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}"></span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
+  (list.map(x=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}">${e(x.mark||'')}</span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
    <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / ${lvTxt(x)}</div>
    <div class=row style=margin-top:8px>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
    <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b g" onclick="cp('${x.id}')">コピー</button><button class="b g" onclick="mv('${x.id}')">移動</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
@@ -135,7 +136,7 @@ async function mk(type){
   const cur=path[path.length-1]||'',fs=[];
   if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
   fs.push({l:'名前',n:'nm',v:'',a:'required'});
-  if(type=='folder')fs.push({t:'color',v:COLORS[0]});
+  if(type=='folder')fs.push({t:'color',v:COLORS[0]},{l:'アイコンの文字(1文字・任意)',n:'mark',v:'',a:'maxlength=2'});
   fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'acc',v:{to:['all'],pv:[]},nopv:type=='folder'});
   const o=await ask({folder:'フォルダを作る',pdf:'PDFをアップロード',text:'テキストを作る'}[type],fs);if(!o)return;
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
@@ -143,7 +144,7 @@ async function mk(type){
   let b64='';
   if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b64=await rd(o.file);b.set(db.doc('blobs/'+ref.id),{d:b64})}
   const d={parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,pv:o.pv||[],version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()};
-  if(type=='folder')d.color=o.color;
+  if(type=='folder'){d.color=o.color;d.mark=[...(o.mark||'')][0]||''}
   b.set(ref,d);await b.commit();
   if(type=='pdf')try{await mkPreview(ref.id,b64);await db.doc('items/'+ref.id).update({pvImg:true})}catch(x){}
   shelf();
@@ -153,13 +154,13 @@ async function upd(id,ver){
   const it=items.find(x=>x.id==id),fs=[];
   if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
   fs.push({l:'名前',n:'nm',v:it.name,a:'required'});
-  if(it.type=='folder')fs.push({t:'color',v:it.color});
+  if(it.type=='folder')fs.push({t:'color',v:it.color},{l:'アイコンの文字(1文字・任意)',n:'mark',v:it.mark||'',a:'maxlength=2'});
   fs.push({l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'acc',v:{to:it.to||['all'],pv:it.pv||[]},nopv:it.type=='folder'});
   if(it.type=='folder')fs.push({t:'chk',n:'apply',l:'この公開範囲を、フォルダの中身すべてにも適用する'});
   if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});
   const o=await ask(ver?`新バージョン(v${it.version+1})`:'編集',fs);if(!o)return;
   let nb='';const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,to:o.to,pv:o.pv||[]};
-  if(it.type=='folder')u.color=o.color;
+  if(it.type=='folder'){u.color=o.color;u.mark=[...(o.mark||'')][0]||''}
   if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
     if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');nb=await rd(o.file);b.set(db.doc('blobs/'+id),{d:nb})}}
   b.update(db.doc('items/'+id),u);
@@ -235,8 +236,8 @@ async function news(pre){
     const codes=x.type=='reset'?RS.filter(r=>r.sid==x.sid.toLowerCase()):[];
     return `<div class="card ${x.wantReply||x.type=='reset'||(x.type=='access'&&x.status=='pending')?'hl':''}"><span class=tag>${TN[x.type]}</span><b>${e(nm)}</b> (${e(x.sid||'')}) <span class=s>${fmt(x.at)}</span>
    ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`
-    :x.type=='reset'?`<div class=s>メモ: ${e(x.note||'なし')}</div>${codes.map(r=>`<div style="margin-top:6px">発行済みコード: <b style="font-size:18px;letter-spacing:2px">${e(r.code)}</b> <span class=s>(${fmt(r.exp)}まで)</span></div>`).join('')}`
-    :x.type=='access'?`<div class=s>ファイル: <b>${e(x.itemName)}</b> / ${x.status=='pending'?'<b style=color:#b91c1c>承認待ち</b>':x.status=='approved'?'承認済み':'見送り'}</div>${x.note?`<div class=s>メモ: ${e(x.note)}</div>`:''}`
+    :x.type=='reset'?`${codes.map(r=>`<div style="margin-top:6px">発行済みコード: <b style="font-size:18px;letter-spacing:2px">${e(r.code)}</b> <span class=s>(${fmt(r.exp)}まで)</span></div>`).join('')}`
+    :x.type=='access'?`<div class=s>ファイル: <b>${e(x.itemName)}</b> / ${x.status=='pending'?'<b style=color:#b91c1c>承認待ち</b>':x.status=='approved'?'承認済み':'見送り'}</div>`
     :x.type=='reset_done'?`<div class=s>新しいパスワードが設定されました</div>`
     :`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div>${x.subject?`<div><b>${e(x.subject)}</b></div>`:''}<div style="white-space:pre-wrap">${e(x.body)}</div>`}
    <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}${x.type=='access'&&x.status=='pending'?`<button class=b onclick="apv(${i},true)">承認</button><button class="b r" onclick="apv(${i},false)">見送り</button>`:''}${x.type=='reset'?`<button class=b onclick="issue(${i})">${codes.length?'コードを再発行':'コードを発行'}</button>`:''}<button class="b g" onclick="delI('${x.id}','${x.type=='access'?'requests':'inbox'}')">削除</button></div></div>`}).join('')||'<p class=s>受信はありません</p>');

@@ -28,7 +28,7 @@ input[type=checkbox]{width:auto;margin:0 8px 0 0}
 .card{background:#fff;border-radius:14px;padding:16px;margin:10px 0;box-shadow:0 1px 3px #0001}
 .it{display:flex;gap:14px;align-items:center;background:#fff;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px #0001;cursor:pointer}
 .ic{flex:none;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
-.ic.f{background:#fef3c7}.ic.f svg{width:24px;fill:#d97706}.ic.pdf{background:#fee2e2;color:#b91c1c}.ic.text{background:#dbeafe;color:#1d4ed8}
+.ic.f{background:#fef3c7}.ic.f{position:relative}.ic.f svg{width:30px;fill:#d97706}.ic.f .mk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;padding-top:4px}.ic.pdf{background:#fee2e2;color:#b91c1c}.ic.text{background:#dbeafe;color:#1d4ed8}
 .s{font-size:12px;color:#64748b}.err{color:#dc2626;font-size:13px;min-height:18px;margin:6px 0}.red{color:#dc2626;font-weight:800}
 .chip{color:#fff;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:700;margin-right:8px}
 .or{text-align:center;color:#94a3b8;font-size:12px;margin:14px 0 6px}
@@ -36,7 +36,9 @@ details{background:#fff;border-radius:14px;margin:10px 0;padding:0 16px;box-shad
 summary{padding:16px 0;font-weight:700;cursor:pointer;list-style:none}summary::after{content:"＋";float:right;color:#94a3b8}details[open] summary::after{content:"－"}
 dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}dt{color:#64748b}dd{margin:0;font-weight:700}
 .ver{text-align:center;color:#94a3b8;font-size:12px;margin:26px 0 0;line-height:1.7}
-#pv canvas{width:100%;display:block;margin:8px 0;border:1px solid #cbd5e1;background:#fff}
+#pv .pg{position:relative;margin:8px 0}#pv .pg::after{content:"";position:absolute;inset:0}
+#pv canvas{width:100%;display:block;border:1px solid #cbd5e1;background:#fff;-webkit-touch-callout:none}
+.bigck{width:96px;height:96px}.steps{text-align:left;background:#f1f5f9;border-radius:12px;padding:12px 16px;margin:14px 0;font-size:14px;line-height:1.7}.steps ol{margin:6px 0 0;padding-left:20px}
 .subt{margin:-6px 0 10px;color:#475569;font-size:15px;white-space:pre-wrap}
 .lk{flex:none;width:22px}.lk svg{width:22px;fill:#b45309}
 .lockbox{position:relative;border-radius:14px;overflow:hidden;background:#e2e8f0;margin:12px 0;min-height:220px}.lockbox img{width:100%;display:block}
@@ -87,8 +89,7 @@ async function doLogin(){
 function resetView(mode='req'){show(`<div class=auth><div class=box><h1 class=lg>パスワードを忘れたとき</h1>
 <div class=two style="margin:10px 0 16px"><button class="b ${mode=='req'?'':'g'}" onclick="resetView('req')">1. 申請する</button><button class="b ${mode=='code'?'':'g'}" onclick="resetView('code')">2. コードを入力</button></div>
 ${mode=='req'?`<p class=sub>学籍番号を入力して申請すると、管理者(はやけん)に届きます。本人確認のあと、リセット用のコード(8桁)を教えてもらえます。申請したあとは、画面を閉じても大丈夫です。</p>
-<label>学籍番号</label><input id=rs><label>管理者へのメモ(任意)</label><input id=rn placeholder="例:次の授業で会えます">
-<p id=er class=err></p><button class="b big" onclick=reqReset()>申請する</button>`:
+<label>学籍番号</label><input id=rs><p id=er class=err></p><button class="b big" onclick=reqReset()>申請する</button>`:
 `<p class=sub>管理者から教えてもらったコードで、新しいパスワードを設定します。コードは発行から7日間使えます。申請のときと同じ画面でなくても大丈夫です。</p>
 <label>学籍番号</label><input id=rs><label>リセットコード(8桁)</label><input id=rc inputmode=numeric maxlength=8>
 <label>新しいパスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
@@ -97,10 +98,15 @@ ${mode=='req'?`<p class=sub>学籍番号を入力して申請すると、管理�
 <button class="b g big" onclick="loginView()">ログインに戻る</button></div></div>`)}
 async function reqReset(){
   const sid=$v('#rs').trim();if(!/^[A-Za-z0-9]+$/.test(sid))return err('学籍番号を入力してください');
-  try{await db.collection('inbox').add({type:'reset',sid:sid.toLowerCase(),note:$v('#rn'),at:Date.now()});
-    err('申請しました。管理者からコードを受け取ったら、「2. コードを入力」へ進んでください。',true)}
+  try{await db.collection('inbox').add({type:'reset',sid:sid.toLowerCase(),at:Date.now()});resetDone()}
   catch(x){err('申請できませんでした。しばらくしてからもう一度お試しください')}
 }
+function resetDone(){show(`<div class=auth><div class=box style="text-align:center">
+<svg class=bigck viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="#16a34a"/><path d="M14 27l8 8 16-17" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<h1 class=lg style="margin-top:14px">申請を送りました</h1><p class=sub>管理者(はやけん)に、パスワード再設定の申請が届きました。</p>
+<div class=steps><b>このあとの流れ</b><ol><li>管理者から、8桁の「リセットコード」を教えてもらいます。本人確認があるので、はやけんに直接聞いてください。</li><li>コードをもらったら、下の「コードを入力する」を押して、新しいパスワードを設定します。</li></ol></div>
+<p class=s>この画面は閉じても大丈夫です。コードは発行から7日間使えます。あとからでも、ログイン画面の「パスワードを忘れた方」→「2. コードを入力」で設定できます。</p>
+<button class="b big" onclick="resetView('code')">コードを入力する</button><button class="b g big" onclick="loginView()">ログインに戻る</button></div></div>`)}
 async function doReset(){
   const sk=$v('#rs').trim().toLowerCase(),code=$v('#rc').trim(),p=$v('#p1');
   if(!/^[a-z0-9]+$/.test(sk)||!/^\d{8}$/.test(code))return err('学籍番号とコード(8桁)を入力してください');
@@ -140,10 +146,12 @@ function rdLegal(k){
   showLegal(k=='t'?'利用規約':'プライバシーポリシー',k=='t'?TERMS:PRIV);LR[k]=1;
   const b=$(k=='t'?'#lt':'#lp2');b.textContent='確認済み';b.classList.add('ok');$('#rb').disabled=!(LR.t&&LR.p);
 }
+// 登録できる学籍番号: 0000000〜0000010 と、2021001〜2026250(各年 001〜250)
+const sidOK=s=>{if(!/^\d{7}$/.test(s))return false;const n=+s;return n<=10||[2021,2022,2023,2024,2025,2026].some(y=>n>=y*1000+1&&n<=y*1000+250)};
 async function doReg(){
   const ln=$v('#ln').trim(),fn=$v('#fn').trim(),sid=$v('#sid').trim(),p=$v('#p1'),sc=$v('#sc').trim();
   if(!ln||!fn||!sid||!p||!sc)return err('すべて入力してください');
-  if(!/^[A-Za-z0-9]+$/.test(sid))return err('学籍番号は英数字で入力してください');
+  if(!sidOK(sid))return err('学籍番号が正しくありません');
   if(!pwOK(p))return err('パスワードが条件を満たしていません');
   if(p!==$v('#p2'))return err('確認用パスワードが一致しません');
   if(!/^\d{8}$/.test(sc))return err('シリアルコードは8桁の数字です');
@@ -191,7 +199,7 @@ async function showImportant(){
 
 /* ---------- 本棚 ---------- */
 const FOLDER='<svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-const icon=it=>{if(it.type!='folder')return `<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;const c=it.color||'#d97706';return `<span class="ic f" style="background:${c}22">${FOLDER.replace('<svg','<svg style="fill:'+c+'"')}</span>`};
+const icon=it=>{if(it.type!='folder')return `<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;const c=it.color||'#d97706';return `<span class="ic f" style="background:${c}22">${FOLDER.replace('<svg','<svg style="fill:'+c+'"')}${it.mark?`<b class=mk>${e(it.mark)}</b>`:''}</span>`};
 function meta(it){const d=days(it.expiry);
   return `<div class=s>${it.type=='folder'?'フォルダ':it.type=='pdf'?'PDF':'テキスト'} / v${it.version} / 有効期限: ${it.expiry||'なし'}${d!==null?` <span class="${d<=7?'red':''}">(あと${d}日)</span>`:''}</div>`}
 const lvl=x=>(!x.to||x.to.includes('all')||x.to.includes(PID))?'v':(x.pv&&(x.pv.includes('all')||x.pv.includes(PID)))?'p':'n'; // v=見れる p=プレビュー n=見れない
@@ -211,12 +219,12 @@ async function openFile(id){
   if(lvl(it)=='n'){cur=null;return shelf()}
   db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
   $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
-   ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button>':''}
+   ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button><div id=dlmsg></div>':''}
    <div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
    <p><button class="b g mini" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>
    <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} / ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
   if(it.type!='pdf')return;
-  try{await renderPdf(id,$('#pv'))}catch(x){$('#pv').innerHTML='<p class=err>表示できませんでした: '+e(x.message||x)+'</p>'}
+  try{await renderPdf(id,$('#pv'),P.last+' '+P.first+'  /  '+P.serial)}catch(x){$('#pv').innerHTML='<p class=err>表示できませんでした: '+e(x.message||x)+'</p>'}
 }
 /* ---- プレビューのみのファイル(モザイク+鍵+リクエスト) ---- */
 const LOCK='<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>';
@@ -230,39 +238,43 @@ async function lockedState(it){
   let r=null;try{const s=await db.doc('requests/'+PID+'_'+it.id).get();if(s.exists)r=s.data()}catch(x){}
   $('#rq').innerHTML=r&&r.status=='pending'
     ?`<div class=card>リクエスト済みです(${fmt(r.at)})。管理者の承認をお待ちください。承認されると、お知らせでお伝えします。</div>`
-    :`${r&&r.status=='denied'?'<p class=s>前回のリクエストは見送られました。</p>':''}<label>管理者へのメモ(任意)</label><input id=rqn placeholder="例:授業で使いたいです"><button class="b big" onclick="reqAccess('${it.id}')">閲覧をリクエストする</button>`;
+    :`${r&&r.status=='denied'?'<p class=s>前回のリクエストは見送られました。</p>':''}<button class="b big" onclick="reqAccess('${it.id}')">閲覧をリクエストする</button>`;
 }
 async function reqAccess(id){
   const it=items.find(x=>x.id==id);
-  try{await db.doc('requests/'+PID+'_'+id).set({pid:PID,itemId:id,itemName:it.name,name:P.last+' '+P.first,sid:P.sid,note:$v('#rqn'),status:'pending',at:Date.now()});lockedState(it)}
+  try{await db.doc('requests/'+PID+'_'+id).set({pid:PID,itemId:id,itemName:it.name,name:P.last+' '+P.first,sid:P.sid,status:'pending',at:Date.now()});lockedState(it)}
   catch(x){alert('送信できませんでした。しばらくしてからもう一度お試しください')}
 }
 // 名前とシリアルコードを入れた新しいPDFを作り、別タブで開く(ダウンロード・印刷はそのタブのボタンから)
 async function dl(){
   if(!PDFDOC)return alert('PDFがまだ表示されていません');
-  const w=window.open('','_blank');if(!w)return alert('ポップアップがブロックされました。許可してからもう一度押してください');
-  w.document.write('<p style="font:16px sans-serif;padding:24px">PDFを作成中です。しばらくお待ちください…</p>');
-  const bt=$('#dlb');bt.disabled=true;
+  const bt=$('#dlb'),lab=bt.textContent,msg=$('#dlmsg');bt.disabled=true;msg.innerHTML='';
   try{
     await loadLib('pdflib');
-    const out=await PDFLib.PDFDocument.create(),txt=P.last+' '+P.first+'  /  '+P.serial;
-    for(let i=1;i<=PDFDOC.numPages;i++){
+    const out=await PDFLib.PDFDocument.create(),txt=P.last+' '+P.first+'  /  '+P.serial,n=PDFDOC.numPages;
+    for(let i=1;i<=n;i++){
+      bt.textContent=`作成中… ${i}/${n}`;
       const pg=await PDFDOC.getPage(i),v1=pg.getViewport({scale:1}),vp=pg.getViewport({scale:2.2}),c=document.createElement('canvas');
       c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');
-      await pg.render({canvasContext:x,viewport:vp}).promise;
+      await pg.render({canvasContext:x,viewport:vp,intent:'print'}).promise; // 他のタブを見ていても止まらない描画方法
       x.font=Math.round(vp.width/55)+'px sans-serif';x.fillStyle='rgba(0,0,0,.5)';x.textAlign='center';x.fillText(txt,vp.width/2,vp.height*0.985);
       const img=await out.embedJpg(c.toDataURL('image/jpeg',.92));
       out.addPage([v1.width,v1.height]).drawImage(img,{x:0,y:0,width:v1.width,height:v1.height});
     }
-    w.location.href=URL.createObjectURL(new Blob([await out.save()],{type:'application/pdf'}));
-  }catch(x){w.close();alert('作成できませんでした: '+(x.message||x))}
-  bt.disabled=false;
+    bt.textContent='仕上げ中…';
+    const url=URL.createObjectURL(new Blob([await out.save()],{type:'application/pdf'}));
+    if(!window.open(url,'_blank'))msg.innerHTML=`<a class="b big" href="${url}" target="_blank" style="text-align:center;text-decoration:none">PDFを開く(別のタブ)</a><p class=s>ポップアップがブロックされたため、このボタンから開いてください。</p>`;
+  }catch(x){alert('作成できませんでした: '+(x.message||x))}
+  bt.textContent=lab;bt.disabled=false;
 }
 // スクリーンショット対策(完全には防げません)
 document.addEventListener('visibilitychange',()=>{document.body.style.filter=document.hidden?'blur(20px)':''});
 window.addEventListener('blur',()=>document.body.style.filter='blur(20px)');
 window.addEventListener('focus',()=>document.body.style.filter='');
 document.addEventListener('keyup',k=>{if(k.key=='PrintScreen'){navigator.clipboard?.writeText('');alert('スクリーンショットは禁止されています')}});
+
+// 右クリック・長押しで画像として保存されるのを防ぐ
+document.addEventListener('contextmenu',ev=>{if(ev.target.closest&&ev.target.closest('#pv,.lockbox'))ev.preventDefault()});
 
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
 async function news(){
