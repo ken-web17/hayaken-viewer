@@ -1,73 +1,64 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>はやけん教材ビューアー【管理者】</title>
+<title>はやけん教材ビューアー 管理者</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#d1d5db;color:#111}
-header{background:#374151;color:#fff;padding:12px 16px;font-weight:700}
-main{max-width:860px;margin:0 auto;padding:16px 16px 90px}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#4b5563}
-nav button{flex:1;padding:14px;border:0;background:none;color:#d1d5db;font-size:15px;border-top:3px solid transparent}
-nav .on{color:#fff;font-weight:700;border-top-color:#fff;background:#374151}
-.card{background:#f9fafb;border-radius:6px;padding:12px;margin:8px 0;border:1px solid #9ca3af}
-input,select,textarea{width:100%;padding:10px;margin:4px 0 10px;border:1px solid #6b7280;border-radius:4px;font-size:16px}
-button.b{background:#374151;color:#fff;border:0;padding:8px 14px;border-radius:4px;font-size:14px;margin:2px}
-button.g{background:#9ca3af;color:#111}button.r{background:#b91c1c}button.on2{background:#111}
-.s{font-size:12px;color:#555}.chip{color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;margin-right:6px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}dialog{width:min(520px,92vw);border:2px solid #374151;border-radius:8px}
-.hl{border-left:5px solid #dc2626}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif;background:#e5e7eb;color:#111827}
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(150deg,#111827,#374151 60%,#6b7280)}
+.box{background:#f9fafb;border-radius:12px;padding:30px 24px;width:100%;max-width:420px;box-shadow:0 24px 60px #0006}
+.lg{margin:0 0 18px;font-size:22px}
+header{background:#1f2937;color:#fff;padding:14px 18px;font-weight:800;font-size:17px;display:flex;justify-content:space-between;align-items:center}
+header i{font-style:normal;background:#f9fafb;color:#1f2937;border-radius:4px;padding:2px 8px;font-size:12px;margin-left:10px}
+main{max-width:900px;margin:0 auto;padding:18px 16px 96px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;gap:6px;padding:8px;background:#111827}
+nav button{flex:1;padding:13px;border:0;border-radius:8px;background:none;font-size:15px;font-weight:700;color:#9ca3af}
+nav .on{background:#4b5563;color:#fff}
+h2,h3{margin:8px 0 12px}
+label{font-size:13px;font-weight:700;color:#374151}
+input,select,textarea{width:100%;padding:11px;margin:5px 0 14px;border:2px solid #d1d5db;border-radius:8px;font-size:16px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:0;border-color:#374151}
+input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
+.rl{display:block;font-weight:400;margin:6px 0;font-size:14px}.who{max-height:150px;overflow:auto;border:2px solid #d1d5db;border-radius:8px;padding:6px 10px;margin-bottom:12px;background:#fff}
+.b{background:#374151;color:#fff;border:0;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:700;margin:2px;cursor:pointer}
+.b.big{display:block;width:100%;padding:14px;font-size:16px}
+.b.g{background:#d1d5db;color:#111827}.b.r{background:#b91c1c}.b.on2{background:#111827}
+.card{background:#fff;border-radius:10px;padding:14px;margin:10px 0;border:1px solid #d1d5db}.card.hl{border-left:6px solid #dc2626}
+.s{font-size:12px;color:#6b7280}.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.err{color:#b91c1c;font-size:13px;min-height:18px}
+.chip{color:#fff;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;margin-right:8px}
+.tag{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:2px 7px;background:#4b5563;color:#fff;margin-right:6px}
+.ver{text-align:center;color:#6b7280;font-size:12px;margin:26px 0 0;line-height:1.7}
+dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="common.js"></script>
+<script src="legal.js"></script>
 <script>
-window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#b91c1c;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js が同じ場所にあるか、設定値を貼ったか確認してください)</pre>');
-const PS=[
- ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/','cmaps/'],
- ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/','../cmaps/'],
- ['https://unpkg.com/pdfjs-dist@3.11.174/build/','../cmaps/']];
-let PC='';
-const ldScript=src=>new Promise((ok,ng)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>{s.remove();ng()};document.head.append(s)});
-async function loadPdfJs(){
-  if(window.pdfjsLib)return;
-  const tried=[];
-  for(const [b,cm] of PS){
-    try{
-      await ldScript(b+'pdf.min.js');
-      try{const t=await(await fetch(b+'pdf.worker.min.js')).text();pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'text/javascript'}))}
-      catch(x){pdfjsLib.GlobalWorkerOptions.workerSrc=b+'pdf.worker.min.js'}
-      PC=b+cm;return;
-    }catch(x){tried.push(new URL(b).host)}
-  }
-  throw new Error('pdf.js を読み込めません(試した場所: '+tried.join(', ')+')。ネットワークや拡張機能のブロックを確認してください');
-}
-async function renderPdf(id,box){
-  await loadPdfJs();
-  const s=await db.doc('blobs/'+id).get();
-  if(!s.exists)throw new Error('PDFデータが見つかりません。管理者サイトで再アップロードしてください');
-  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(s.data().d),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
-  box.innerHTML='';
-  for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.6}),c=document.createElement('canvas');
-    c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;box.append(c)}
-}
-const auth=firebase.auth(),db=firebase.firestore();
-const $=s=>document.querySelector(s),$v=s=>$(s).value;
-const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const G={'教材について(追加)':'#2563eb','教材について(更新)':'#2563eb','お知らせ':'#f59e0b','重要なお知らせ':'#dc2626','メッセージ':'#16a34a'};
-const fmt=t=>new Date(t).toLocaleString('ja-JP');
+window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#b91c1c;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js・common.js・legal.js が同じ場所にあるか確認してください)</pre>');
+// 管理者サイトは「admin」という別名のFirebaseアプリを使う → 利用者サイトとログイン状態が混ざりません
+const FA=firebase.initializeApp(firebase.app().options,'admin');
+const auth=FA.auth(),db=FA.firestore();
 const col=async n=>(await db.collection(n).get()).docs.map(d=>({id:d.id,...d.data()}));
 let A=null,tab='shelf',sub='send',path=[],items=[],users=[];
 const show=h=>$('#app').innerHTML=h;
 
 function ask(t,fs){return new Promise(r=>{const d=document.createElement('dialog');
-  d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(f=>`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=5>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`)).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
+  d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(f=>f.t=='who'?who(f.v):`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=5>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`)).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
   document.body.append(d);d.showModal();
-  d.onclose=()=>{const o={};if(d.returnValue=='ok')new FormData(d.querySelector('form')).forEach((v,k)=>o[k]=v);r(d.returnValue=='ok'?o:null);d.remove()}})}
+  d.onclose=()=>{const o={};if(d.returnValue=='ok'){const fd=new FormData(d.querySelector('form'));fd.forEach((v,k)=>o[k]=v);o.to=fd.get('scope')=='sel'?fd.getAll('to'):['all']}r(d.returnValue=='ok'?o:null);d.remove()}})}
+function who(v=['all']){const all=v.includes('all');
+  return `<label>公開範囲</label><label class=rl><input type=radio name=scope value=all ${all?'checked':''}>全員</label><label class=rl><input type=radio name=scope value=sel ${all?'':'checked'}>選んだ人だけ</label>
+  <div class=who>${users.map(u=>`<label class=rl><input type=checkbox name=to value="${u.id}" ${!all&&v.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')||'<span class=s>登録ユーザーがいません</span>'}</div>`}
+const scopeTxt=x=>!x.to||x.to.includes('all')?'全員':x.to.length+'人';
 const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
 
-function loginView(m=''){show(`<header>管理者ログイン</header><main><p style=color:#b91c1c>${e(m)}</p><label>メールアドレス</label><input id=em><label>パスワード</label><input id=pw type=password><button class=b onclick=login()>ログイン</button></main>`)}
+function loginView(m=''){show(`<div class=auth><div class=box><h1 class=lg>管理者ログイン</h1>
+<label>メールアドレス</label><input id=em autocomplete=username><label>パスワード</label><input id=pw type=password autocomplete=current-password onkeydown="if(event.key=='Enter')login()">
+<p class=err>${e(m)}</p><button class="b big" onclick=login()>ログイン</button></div></div>`)}
 async function login(){try{await auth.signInWithEmailAndPassword($v('#em'),$v('#pw'))}catch(x){loginView('ログインできません')}}
 auth.onAuthStateChanged(async u=>{
   if(!u)return loginView();
@@ -75,40 +66,44 @@ auth.onAuthStateChanged(async u=>{
   A=u;render();
 });
 function render(){
-  show(`<header>はやけん教材ビューアー【管理者】 <button class="b g" style=float:right onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','📚 本棚'],['news','🔔 お知らせ'],['set','⚙ 設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<header><span>はやけん教材ビューアー<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,set})[tab]();
 }
 
 /* ---------- 本棚 ---------- */
 async function shelf(){
-  items=await col('items');
+  [items,users]=await Promise.all([col('items'),col('users')]);
+  const nt=items.filter(x=>!x.to); // 古いデータに公開範囲を自動で付ける
+  if(nt.length){const b=db.batch();nt.forEach(x=>{b.update(db.doc('items/'+x.id),{to:['all']});x.to=['all']});await b.commit()}
   const cur=path[path.length-1]||'',f=items.find(x=>x.id==cur);
   const list=items.filter(x=>x.parent==cur).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
-  $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">← 戻る</button>':''}<b>${path.length?'📁 '+e(f?.name):'ホーム'}</b></div>
-  <div class=row><button class=b onclick="mk('folder')">＋フォルダ</button><button class=b onclick="mk('pdf')">＋PDFアップロード</button><button class=b onclick="mk('text')">＋テキスト</button></div>`+
-  (list.map(x=>`<div class=card><b>${x.type=='folder'?'📁':x.type=='pdf'?'📄':'📝'} ${e(x.name)}</b>
-   <div class=s>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'} ｜ v${x.version} ｜ 有効期限: ${x.expiry||'なし'}</div>
-   <div class=row>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">📖 開く</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
+  $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">戻る</button>':''}<h2 style=margin:0>${path.length?e(f?.name):'本棚'}</h2></div>
+  <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div>`+
+  (list.map(x=>`<div class=card><span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
+   <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / 公開: ${scopeTxt(x)}</div>
+   <div class=row style=margin-top:8px>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
    <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
 }
 async function mk(type){
-  const cur=path[path.length-1]||'';
-  const fs=[];if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
-  fs.push({l:'名前',n:'nm',v:'',a:'required'},{l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''});
-  const o=await ask({folder:'フォルダ作成',pdf:'PDFアップロード',text:'テキスト作成'}[type],fs);if(!o)return;
+  const cur=path[path.length-1]||'',fs=[];
+  if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
+  fs.push({l:'名前',n:'nm',v:'',a:'required'},{l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'who',v:['all']});
+  const o=await ask({folder:'フォルダを作る',pdf:'PDFをアップロード',text:'テキストを作る'}[type],fs);if(!o)return;
+  if(!o.to.length)return alert('公開する人を選んでください');
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
   const ref=db.collection('items').doc(),b=db.batch();
   if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+ref.id),{d:await rd(o.file)})}
-  b.set(ref,{parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()});
+  b.set(ref,{parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()});
   await b.commit();shelf();
 }
 async function upd(id,ver){
   const it=items.find(x=>x.id==id),fs=[];
   if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
-  fs.push({l:'名前',n:'nm',v:it.name,a:'required'},{l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body});
+  fs.push({l:'名前',n:'nm',v:it.name,a:'required'},{l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'who',v:it.to||['all']});
   if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});
   const o=await ask(ver?`新バージョン(v${it.version+1})`:'編集',fs);if(!o)return;
-  const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd};
+  if(!o.to.length)return alert('公開する人を選んでください');
+  const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,to:o.to};
   if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
     if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+id),{d:await rd(o.file)})}}
   b.update(db.doc('items/'+id),u);await b.commit();shelf();
@@ -121,33 +116,33 @@ async function del(id){
 }
 async function vw(id){
   const it=items.find(x=>x.id==id),d=document.createElement('dialog');d.style.width='min(900px,96vw)';
-  d.innerHTML=`<h3>${e(it.name)}</h3><div class=s>v${it.version} ｜ 有効期限: ${e(it.expiry||'なし')}</div><div id=vb>${it.type=='pdf'?'読み込み中…':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
+  d.innerHTML=`<h3>${e(it.name)}</h3><div class=s>v${it.version} / 有効期限: ${e(it.expiry||'なし')}</div><div id=vb>${it.type=='pdf'?'読み込み中…':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
   ${it.type=='pdf'?`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`:''}<p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
   document.body.append(d);d.showModal();
-  if(it.type=='pdf'){const b=d.querySelector('#vb');try{await renderPdf(id,b);b.querySelectorAll('canvas').forEach(c=>c.style.cssText='width:100%;display:block;margin:6px 0;border:1px solid #999')}catch(x){b.innerHTML='<p style=color:#b91c1c>表示できませんでした: '+e(x.message||x)+'</p>'}}
+  if(it.type=='pdf'){const b=d.querySelector('#vb');try{await renderPdf(id,b);b.querySelectorAll('canvas').forEach(c=>c.style.cssText='width:100%;display:block;margin:6px 0;border:1px solid #999')}catch(x){b.innerHTML='<p class=err>表示できませんでした: '+e(x.message||x)+'</p>'}}
 }
 async function lg(id){
   const l=(await col('logs')).filter(x=>x.itemId==id).sort((a,b)=>b.at-a.at);
-  const d=document.createElement('dialog');d.innerHTML=`<h3>閲覧履歴</h3>${l.map(x=>`<div class=s>${fmt(x.at)} ｜ ${e(x.name)}</div>`).join('')||'まだ誰も開いていません'}<p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  const d=document.createElement('dialog');d.innerHTML=`<h3>閲覧履歴</h3>${l.map(x=>`<div class=s>${fmt(x.at)} / ${e(x.name)}</div>`).join('')||'まだ誰も開いていません'}<p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
   document.body.append(d);d.showModal();
 }
 
 /* ---------- お知らせ ---------- */
-function subBar(){return `<div class=row>${[['send','送付'],['hist','送付済み'],['inbox','受信(連絡・登録)']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
+function subBar(){return `<div class=row style=margin-bottom:10px>${[['send','送付'],['hist','送付済み'],['inbox','受信(連絡・登録)']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
 async function news(pre){
   users=await col('users');
   if(sub=='send')return compose(pre);
   if(sub=='hist'){
     const l=(await col('notices')).sort((a,b)=>b.createdAt-a.createdAt);window._n=l;
     $('#m').innerHTML=subBar()+(l.map((n,i)=>`<div class=card><span class=chip style="background:${G[n.genre]}">${e(n.genre)}</span><b>${e(n.subject)}</b>
-     <div class=s>${fmt(n.createdAt)} ｜ 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')}</div>
-     <div class=row><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
+     <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')}</div>
+     <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
   const l=(await col('inbox')).sort((a,b)=>b.at-a.at);window._i=l;
-  $('#m').innerHTML=subBar()+(l.map((x,i)=>`<div class="card ${x.wantReply?'hl':''}"><b>${{signup:'🆕 新規登録',contact:'✉ 連絡・相談',withdraw:'👋 退会'}[x.type]}</b> ${e(x.name)} (${e(x.sid)}) <span class=s>${fmt(x.at)}</span>
+  $('#m').innerHTML=subBar()+(l.map((x,i)=>`<div class="card ${x.wantReply?'hl':''}"><span class=tag>${{signup:'新規登録',contact:'連絡・相談',withdraw:'退会'}[x.type]}</span><b>${e(x.name)}</b> (${e(x.sid)}) <span class=s>${fmt(x.at)}</span>
    ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`:`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div><div style="white-space:pre-wrap">${e(x.body)}</div>`}
-   <div class=row>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>受信はありません</p>');
+   <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>受信はありません</p>');
 }
 function reply(i){const x=_i[i];sub='send';news({to:[x.uid],genre:'メッセージ',subject:'Re: '+x.category,body:''})}
 async function delN(id){if(confirm('削除しますか?')){await db.doc('notices/'+id).delete();news()}}
@@ -159,8 +154,8 @@ function compose(p={}){
   <label>ジャンル</label><select id=gn>${Object.keys(G).map(g=>`<option ${p.genre==g?'selected':''}>${g}</option>`).join('')}</select>
   <label>本文</label><textarea id=bd rows=6>${e(p.body)}</textarea>
   <label>送り先</label><div class=row><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=true)">すべて選択</button><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=false)">選択解除</button></div>
-  ${users.map(u=>`<label style="display:block"><input type=checkbox class=rc value="${u.id}" style="width:auto" ${all||to.includes(u.id)?'checked':''}> ${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}
-  <button class=b onclick="sendN('${p.id||''}')">${p.id?'更新':'送付'}</button></div>`;
+  <div class=who>${users.map(u=>`<label class=rl><input type=checkbox class=rc value="${u.id}" ${all||to.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}</div>
+  <button class="b big" onclick="sendN('${p.id||''}')">${p.id?'更新する':'送付する'}</button></div>`;
 }
 async function sendN(id){
   const ch=[...document.querySelectorAll('.rc:checked')].map(c=>c.value);
@@ -173,12 +168,13 @@ async function sendN(id){
 /* ---------- 設定 ---------- */
 async function set(){
   users=await col('users');const sr=await col('serials');
-  $('#m').innerHTML=`<h3>登録ユーザー</h3><input id=q placeholder="名前・学籍番号で検索" oninput=ul()><div id=ul></div>
-  <h3>シリアルコード</h3><button class=b onclick=gen()>新しいコードを発行</button><div id=sl>${sr.sort((a,b)=>b.createdAt-a.createdAt).map(s=>{const u=users.find(x=>x.id==s.usedBy);return `<div class=s>${s.id} ｜ ${s.usedBy?'使用済み: '+e(u?u.last+' '+u.first:'(退会済)'):'未使用'}</div>`}).join('')}</div>`;
+  $('#m').innerHTML=`<h2>登録ユーザー</h2><input id=q placeholder="名前・学籍番号で検索" oninput=ul()><div id=ul></div>
+  <h2>シリアルコード</h2><button class=b onclick=gen()>新しいコードを発行</button><div class=card>${sr.sort((a,b)=>b.createdAt-a.createdAt).map(s=>{const u=users.find(x=>x.id==s.usedBy);return `<div class=s>${s.id} / ${s.usedBy?'使用済み: '+e(u?u.last+' '+u.first:'(退会済)'):'未使用'}</div>`}).join('')||'<span class=s>まだありません</span>'}</div>
+  <h2>アプリ情報</h2><div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシー</button></div>${verHtml()}`;
   ul();
 }
 function ul(){const q=$v('#q').toLowerCase();
-  $('#ul').innerHTML=users.filter(u=>(u.last+u.first+u.sid).toLowerCase().includes(q)).map(u=>`<div class=card onclick="ud('${u.id}')" style=cursor:pointer><b>${e(u.last+' '+u.first)}</b>${u.banned?' 🚫BAN中':''}<div class=s>ID: ${e(u.sid)} ｜ シリアル: ${e(u.serial)}</div></div>`).join('')||'<p class=s>該当なし</p>'}
+  $('#ul').innerHTML=users.filter(u=>(u.last+u.first+u.sid).toLowerCase().includes(q)).map(u=>`<div class=card onclick="ud('${u.id}')" style=cursor:pointer><b>${e(u.last+' '+u.first)}</b>${u.banned?' <span class=tag style=background:#b91c1c>停止中</span>':''}<div class=s>ID: ${e(u.sid)} / シリアル: ${e(u.serial)}</div></div>`).join('')||'<p class=s>該当なし</p>'}
 async function gen(){
   let c;do{c=String(Math.floor(Math.random()*1e8)).padStart(8,'0')}while((await db.doc('serials/'+c).get()).exists);
   await db.doc('serials/'+c).set({usedBy:null,createdAt:Date.now()});alert('発行しました: '+c);set();
@@ -186,10 +182,10 @@ async function gen(){
 async function ud(id){
   const u=users.find(x=>x.id==id),its=await col('items');
   const lg=(await col('logs')).filter(x=>x.uid==id).sort((a,b)=>b.at-a.at),ib=(await col('inbox')).filter(x=>x.uid==id&&x.type!='signup').sort((a,b)=>b.at-a.at);
-  $('#m').innerHTML=`<button class="b g" onclick=set()>← 戻る</button><div class=card><h3>${e(u.last+' '+u.first)} ${u.banned?'🚫':''}</h3><p>ログインID: ${e(u.sid)}<br>シリアルコード: ${e(u.serial)}<br>登録日: ${fmt(u.createdAt)}</p>
-  <div class=row><button class=b onclick="edU('${id}')">名前を変更</button><button class="b ${u.banned?'':'r'}" onclick="ban('${id}',${!u.banned})">${u.banned?'BAN解除':'BAN'}</button><button class="b r" onclick="rmU('${id}')">アカウント削除</button></div></div>
-  <h4>見たファイル</h4>${lg.map(x=>`<div class=s>${fmt(x.at)} ｜ ${e(its.find(i=>i.id==x.itemId)?.name||'(削除済)')}</div>`).join('')||'<p class=s>なし</p>'}
-  <h4>送信したメッセージ</h4>${ib.map(x=>`<div class=card><span class=s>${fmt(x.at)} ｜ ${e(x.category||'退会')}</span><div style=white-space:pre-wrap>${e(x.body)}</div></div>`).join('')||'<p class=s>なし</p>'}`;
+  $('#m').innerHTML=`<button class="b g" onclick=set()>戻る</button><div class=card><h3>${e(u.last+' '+u.first)}${u.banned?' (停止中)':''}</h3><p>ログインID: ${e(u.sid)}<br>シリアルコード: ${e(u.serial)}<br>登録日: ${fmt(u.createdAt)}${u.agreedAt?`<br>規約への同意: ${fmt(u.agreedAt)}`:''}</p>
+  <div class=row><button class=b onclick="edU('${id}')">名前を変更</button><button class="b ${u.banned?'':'r'}" onclick="ban('${id}',${!u.banned})">${u.banned?'停止を解除':'BAN(停止)'}</button><button class="b r" onclick="rmU('${id}')">アカウント削除</button></div></div>
+  <h3>見たファイル</h3>${lg.map(x=>`<div class=s>${fmt(x.at)} / ${e(its.find(i=>i.id==x.itemId)?.name||'(削除済)')}</div>`).join('')||'<p class=s>なし</p>'}
+  <h3>送信したメッセージ</h3>${ib.map(x=>`<div class=card><span class=s>${fmt(x.at)} / ${e(x.category||'退会')}</span><div style=white-space:pre-wrap>${e(x.body)}</div></div>`).join('')||'<p class=s>なし</p>'}`;
 }
 async function edU(id){const u=users.find(x=>x.id==id),o=await ask('名前を変更',[{l:'姓',n:'l',v:u.last},{l:'名',n:'f',v:u.first}]);if(!o)return;await db.doc('users/'+id).update({last:o.l,first:o.f});set()}
 async function ban(id,v){await db.doc('users/'+id).update({banned:v});set()}
