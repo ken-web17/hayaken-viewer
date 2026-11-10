@@ -1,5 +1,5 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='2.0.1',APP_DATE='2026-11-10';
+const APP_VERSION='2.0.2',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');

@@ -37,6 +37,7 @@ summary{padding:16px 0;font-weight:700;cursor:pointer;list-style:none}summary::a
 dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}dt{color:#64748b}dd{margin:0;font-weight:700}
 .ver{text-align:center;color:#94a3b8;font-size:12px;margin:26px 0 0;line-height:1.7}
 #pv canvas{width:100%;display:block;margin:8px 0;border:1px solid #cbd5e1;background:#fff}
+.subt{margin:-6px 0 10px;color:#475569;font-size:15px;white-space:pre-wrap}
 .nosel{user-select:none;-webkit-user-select:none}
 dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::backdrop{background:#0008}
 @media print{body{display:none!important}}
@@ -129,9 +130,9 @@ async function shelf(){
 async function openFile(id){
   const it=items.find(x=>x.id==id);
   db.collection('logs').add({itemId:id,uid:U.uid,name:P.last+' '+P.first,at:Date.now()});
-  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${meta(it)}
+  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
+   ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button>':''}
    <div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
-   ${it.type=='pdf'?`<div class=card style="white-space:pre-wrap">${e(it.body)}</div><button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button>`:''}
    <p><button class="b g mini" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>
    <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} / ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
   if(it.type!='pdf')return;
