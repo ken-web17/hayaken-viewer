@@ -28,6 +28,8 @@ input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
 .chip{color:#fff;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;margin-right:8px}
 .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:2px 7px;background:#4b5563;color:#fff;margin-right:6px}
 .ver{text-align:center;color:#6b7280;font-size:12px;margin:26px 0 0;line-height:1.7}
+.sw{margin-bottom:10px}.sw input{display:none}.sw span{display:inline-block;width:30px;height:30px;border-radius:50%;margin:4px;border:3px solid transparent;cursor:pointer}.sw input:checked+span{border-color:#111}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}
 dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
 </style></head><body>
 <div id="app"></div>
@@ -43,11 +45,18 @@ window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="col
 const FA=firebase.initializeApp(firebase.app().options,'admin');
 const auth=FA.auth(),db=FA.firestore();
 const col=async n=>(await db.collection(n).get()).docs.map(d=>({id:d.id,...d.data()}));
-let A=null,tab='shelf',sub='send',path=[],items=[],users=[];
+const COLORS=['#d97706','#dc2626','#16a34a','#2563eb','#7c3aed','#db2777','#0891b2','#475569'];
+let A=null,tab='shelf',sub='send',flt='all',path=[],items=[],users=[],RS=[];
 const show=h=>$('#app').innerHTML=h;
+const byName=(a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 
+/* 入力ダイアログ(いろいろな種類の入力欄に対応) */
 function ask(t,fs){return new Promise(r=>{const d=document.createElement('dialog');
-  d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(f=>f.t=='who'?who(f.v):`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=5>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`)).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
+  const fld=f=>f.t=='who'?who(f.v):f.t=='color'?`<label>色</label><div class=sw>${COLORS.map(c=>`<label><input type=radio name=color value="${c}" ${c==(f.v||COLORS[0])?'checked':''}><span style="background:${c}"></span></label>`).join('')}</div>`
+    :f.t=='chk'?`<label class=rl><input type=checkbox name=${f.n}>${f.l}</label>`
+    :f.t=='sel'?`<label>${f.l}</label><select name=${f.n}>${f.opts.map(o=>`<option value="${o.id}" ${o.id==f.v?'selected':''}>${e(o.label)}</option>`).join('')}</select>`
+    :`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=${f.r||5}>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`);
+  d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(fld).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
   document.body.append(d);d.showModal();
   d.onclose=()=>{const o={};if(d.returnValue=='ok'){const fd=new FormData(d.querySelector('form'));fd.forEach((v,k)=>o[k]=v);o.to=fd.get('scope')=='sel'?fd.getAll('to'):['all']}r(d.returnValue=='ok'?o:null);d.remove()}})}
 function who(v=['all']){const all=v.includes('all');
@@ -63,7 +72,7 @@ async function login(){try{await auth.signInWithEmailAndPassword($v('#em'),$v('#
 auth.onAuthStateChanged(async u=>{
   if(!u)return loginView();
   if(!(await db.doc('admins/'+u.uid).get()).exists){await auth.signOut();return loginView('管理者ではありません')}
-  A=u;render();
+  A=u;loadLegal();render();
 });
 function render(){
   show(`<header><span>はやけん教材ビューアー<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
@@ -76,37 +85,74 @@ async function shelf(){
   const nt=items.filter(x=>!x.to); // 古いデータに公開範囲を自動で付ける
   if(nt.length){const b=db.batch();nt.forEach(x=>{b.update(db.doc('items/'+x.id),{to:['all']});x.to=['all']});await b.commit()}
   const cur=path[path.length-1]||'',f=items.find(x=>x.id==cur);
-  const list=items.filter(x=>x.parent==cur).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
+  const list=items.filter(x=>x.parent==cur).sort(byName);
   $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">戻る</button>':''}<h2 style=margin:0>${path.length?e(f?.name):'本棚'}</h2></div>
-  <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div>`+
-  (list.map(x=>`<div class=card><span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
+  <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div><div id=busy></div>`+
+  (list.map(x=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}"></span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
    <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / 公開: ${scopeTxt(x)}</div>
    <div class=row style=margin-top:8px>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
-   <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
+   <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b g" onclick="cp('${x.id}')">コピー</button><button class="b g" onclick="mv('${x.id}')">移動</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
+}
+function folderOpts(excl){ // 「ホーム / A / B」の形で、選べるフォルダ一覧を作る(自分自身とその中は除く)
+  const out=[{id:'',label:'ホーム'}];
+  const walk=(pid,pre)=>items.filter(x=>x.parent==pid&&x.type=='folder'&&x.id!=excl).sort(byName).forEach(f=>{const l=pre+' / '+f.name;out.push({id:f.id,label:l});walk(f.id,l)});
+  walk('','ホーム');return out;
 }
 async function mk(type){
   const cur=path[path.length-1]||'',fs=[];
   if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
-  fs.push({l:'名前',n:'nm',v:'',a:'required'},{l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'who',v:['all']});
+  fs.push({l:'名前',n:'nm',v:'',a:'required'});
+  if(type=='folder')fs.push({t:'color',v:COLORS[0]});
+  fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'who',v:['all']});
   const o=await ask({folder:'フォルダを作る',pdf:'PDFをアップロード',text:'テキストを作る'}[type],fs);if(!o)return;
   if(!o.to.length)return alert('公開する人を選んでください');
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
   const ref=db.collection('items').doc(),b=db.batch();
   if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+ref.id),{d:await rd(o.file)})}
-  b.set(ref,{parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()});
-  await b.commit();shelf();
+  const d={parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,to:o.to,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()};
+  if(type=='folder')d.color=o.color;
+  b.set(ref,d);await b.commit();shelf();
 }
+const subtree=id=>items.filter(x=>x.parent==id).flatMap(x=>[x.id,...subtree(x.id)]);
 async function upd(id,ver){
   const it=items.find(x=>x.id==id),fs=[];
   if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
-  fs.push({l:'名前',n:'nm',v:it.name,a:'required'},{l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'who',v:it.to||['all']});
+  fs.push({l:'名前',n:'nm',v:it.name,a:'required'});
+  if(it.type=='folder')fs.push({t:'color',v:it.color});
+  fs.push({l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'who',v:it.to||['all']});
+  if(it.type=='folder')fs.push({t:'chk',n:'apply',l:'この公開範囲を、フォルダの中身すべてにも適用する'});
   if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});
   const o=await ask(ver?`新バージョン(v${it.version+1})`:'編集',fs);if(!o)return;
   if(!o.to.length)return alert('公開する人を選んでください');
   const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,to:o.to};
+  if(it.type=='folder')u.color=o.color;
   if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
     if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+id),{d:await rd(o.file)})}}
-  b.update(db.doc('items/'+id),u);await b.commit();shelf();
+  b.update(db.doc('items/'+id),u);
+  if(o.apply)subtree(id).forEach(c=>b.update(db.doc('items/'+c),{to:o.to}));
+  await b.commit();shelf();
+}
+async function copyTree(id,dest,nm){
+  const it=items.find(x=>x.id==id),ref=db.collection('items').doc(),d={...it};delete d.id;
+  Object.assign(d,{parent:dest,name:nm??it.name,version:1,history:[{v:1,at:Date.now(),note:'コピー'}],createdAt:Date.now()});
+  const b=db.batch();b.set(ref,d);
+  if(it.type=='pdf'){const s=await db.doc('blobs/'+id).get();if(s.exists)b.set(db.doc('blobs/'+ref.id),s.data())}
+  await b.commit();
+  if(it.type=='folder')for(const c of items.filter(x=>x.parent==id))await copyTree(c.id,ref.id);
+}
+async function cp(id){
+  const it=items.find(x=>x.id==id);
+  const o=await ask('コピー',[{l:'コピー先',n:'dest',t:'sel',opts:folderOpts(it.type=='folder'?id:null),v:it.parent},{l:'新しい名前',n:'nm',v:it.name+' のコピー',a:'required'}]);if(!o)return;
+  if(items.some(x=>x.parent==o.dest&&x.name==o.nm&&x.type==it.type))return alert('コピー先に同じ名前があります。名前を変えてください。');
+  $('#busy').innerHTML='<p class=s>コピー中です。しばらくお待ちください…</p>';
+  try{await copyTree(id,o.dest,o.nm)}catch(x){alert('コピーできませんでした: '+(x.message||x))}
+  shelf();
+}
+async function mv(id){
+  const it=items.find(x=>x.id==id);
+  const o=await ask('移動',[{l:'移動先',n:'dest',t:'sel',opts:folderOpts(it.type=='folder'?id:null),v:it.parent}]);if(!o||o.dest==it.parent)return;
+  if(items.some(x=>x.parent==o.dest&&x.name==it.name&&x.type==it.type))return alert('移動先に同じ名前があります。先に名前を変えてください。');
+  await db.doc('items/'+id).update({parent:o.dest});shelf();
 }
 async function del(id){
   const it=items.find(x=>x.id==id);
@@ -128,7 +174,9 @@ async function lg(id){
 }
 
 /* ---------- お知らせ ---------- */
-function subBar(){return `<div class=row style=margin-bottom:10px>${[['send','送付'],['hist','送付済み'],['inbox','受信(連絡・登録)']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
+function subBar(){return `<div class=row style=margin-bottom:10px>${[['send','送付'],['hist','送付済み'],['inbox','受信']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
+const FL=[['all','すべて'],['contact','連絡・相談'],['reset','パスワード再設定'],['signup','新規登録'],['withdraw','退会']];
+const TN={signup:'新規登録',contact:'連絡・相談',withdraw:'退会',reset:'パスワード再設定の申請',reset_done:'パスワード再設定の完了'};
 async function news(pre){
   users=await col('users');
   if(sub=='send')return compose(pre);
@@ -139,12 +187,33 @@ async function news(pre){
      <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
-  const l=(await col('inbox')).sort((a,b)=>b.at-a.at);window._i=l;
-  $('#m').innerHTML=subBar()+(l.map((x,i)=>`<div class="card ${x.wantReply?'hl':''}"><span class=tag>${{signup:'新規登録',contact:'連絡・相談',withdraw:'退会'}[x.type]}</span><b>${e(x.name)}</b> (${e(x.sid)}) <span class=s>${fmt(x.at)}</span>
-   ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`:`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div><div style="white-space:pre-wrap">${e(x.body)}</div>`}
-   <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>受信はありません</p>');
+  const all=(await col('inbox')).sort((a,b)=>b.at-a.at);RS=await col('resets');
+  const l=all.filter(x=>flt=='all'||x.type==flt||(flt=='reset'&&x.type=='reset_done'));window._i=l;
+  const pend=all.filter(x=>x.type=='reset').length;
+  $('#m').innerHTML=subBar()+`<div class=row style=margin-bottom:6px>${FL.map(f=>`<button class="b ${flt==f[0]?'on2':'g'}" onclick="flt='${f[0]}';news()">${f[1]}${f[0]=='reset'&&pend?` (${pend})`:''}</button>`).join('')}</div>`+
+  (l.map((x,i)=>{
+    const u=users.find(z=>z.id==x.uid||(x.sid&&(z.sid||'').toLowerCase()==x.sid.toLowerCase()));
+    const nm=x.name||(u?u.last+' '+u.first:'(未登録の学籍番号)');
+    const codes=x.type=='reset'?RS.filter(r=>r.sid==x.sid.toLowerCase()):[];
+    return `<div class="card ${x.wantReply||x.type=='reset'?'hl':''}"><span class=tag>${TN[x.type]}</span><b>${e(nm)}</b> (${e(x.sid||'')}) <span class=s>${fmt(x.at)}</span>
+   ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`
+    :x.type=='reset'?`<div class=s>メモ: ${e(x.note||'なし')}</div>${codes.map(r=>`<div style="margin-top:6px">発行済みコード: <b style="font-size:18px;letter-spacing:2px">${e(r.code)}</b> <span class=s>(${fmt(r.exp)}まで)</span></div>`).join('')}`
+    :x.type=='reset_done'?`<div class=s>新しいパスワードが設定されました</div>`
+    :`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div>${x.subject?`<div><b>${e(x.subject)}</b></div>`:''}<div style="white-space:pre-wrap">${e(x.body)}</div>`}
+   <div class=row style=margin-top:8px>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}${x.type=='reset'?`<button class=b onclick="issue(${i})">${codes.length?'コードを再発行':'コードを発行'}</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`}).join('')||'<p class=s>受信はありません</p>');
 }
-function reply(i){const x=_i[i];sub='send';news({to:[x.uid],genre:'メッセージ',subject:'Re: '+x.category,body:''})}
+async function issue(i){
+  const x=_i[i],sk=x.sid.toLowerCase(),u=users.find(z=>(z.sid||'').toLowerCase()==sk);
+  if(!u)return alert('この学籍番号のユーザーが登録されていません');
+  if(!confirm(`${u.last} ${u.first}さんのリセットコードを発行します。本人確認はできていますか?`))return;
+  const b=db.batch(),code=String(Math.floor(Math.random()*1e8)).padStart(8,'0');
+  RS.filter(r=>r.sid==sk).forEach(r=>b.delete(db.doc('resets/'+r.id)));
+  b.set(db.doc('resets/'+sk+'_'+code),{sid:sk,pid:u.id,code,exp:Date.now()+7*864e5,createdAt:Date.now()});
+  await b.commit();
+  const d=document.createElement('dialog');d.innerHTML=`<h3>リセットコード</h3><p style="font-size:32px;font-weight:800;letter-spacing:4px;text-align:center">${code}</p><p class=s>このコードを、本人に直接伝えてください(7日間有効)。本人はログイン画面の「パスワードを忘れた方」から、学籍番号とこのコードを入力して、新しいパスワードを設定できます。この画面を閉じても、受信の一覧でコードを確認できます。</p><p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  document.body.append(d);d.showModal();d.onclose=()=>news();
+}
+function reply(i){const x=_i[i];sub='send';news({to:[x.uid],genre:'メッセージ',subject:'Re: '+(x.subject||x.category),body:''})}
 async function delN(id){if(confirm('削除しますか?')){await db.doc('notices/'+id).delete();news()}}
 async function delI(id){if(confirm('削除しますか?')){await db.doc('inbox/'+id).delete();news()}}
 function compose(p={}){
@@ -170,8 +239,14 @@ async function set(){
   users=await col('users');const sr=await col('serials');
   $('#m').innerHTML=`<h2>登録ユーザー</h2><input id=q placeholder="名前・学籍番号で検索" oninput=ul()><div id=ul></div>
   <h2>シリアルコード</h2><button class=b onclick=gen()>新しいコードを発行</button><div class=card>${sr.sort((a,b)=>b.createdAt-a.createdAt).map(s=>{const u=users.find(x=>x.id==s.usedBy);return `<div class=s>${s.id} / ${s.usedBy?'使用済み: '+e(u?u.last+' '+u.first:'(退会済)'):'未使用'}</div>`}).join('')||'<span class=s>まだありません</span>'}</div>
-  <h2>アプリ情報</h2><div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシー</button></div>${verHtml()}`;
+  <h2>利用規約・プライバシーポリシー</h2><div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約を見る</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシーを見る</button><button class=b onclick=editLegal()>2つを編集する</button></div>
+  <h2>アプリ情報</h2>${verHtml()}`;
   ul();
+}
+async function editLegal(){
+  const o=await ask('利用規約・プライバシーポリシーを編集',[{l:'利用規約',n:'t',t:'area',r:12,v:TERMS},{l:'プライバシーポリシー',n:'p',t:'area',r:12,v:PRIV}]);if(!o)return;
+  if(!o.t.trim()||!o.p.trim())return alert('空にはできません');
+  await db.doc('settings/legal').set({terms:o.t,priv:o.p,updatedAt:Date.now()});TERMS=o.t;PRIV=o.p;alert('保存しました。新規登録の画面にすぐ反映されます。');
 }
 function ul(){const q=$v('#q').toLowerCase();
   $('#ul').innerHTML=users.filter(u=>(u.last+u.first+u.sid).toLowerCase().includes(q)).map(u=>`<div class=card onclick="ud('${u.id}')" style=cursor:pointer><b>${e(u.last+' '+u.first)}</b>${u.banned?' <span class=tag style=background:#b91c1c>停止中</span>':''}<div class=s>ID: ${e(u.sid)} / シリアル: ${e(u.serial)}</div></div>`).join('')||'<p class=s>該当なし</p>'}
@@ -181,13 +256,20 @@ async function gen(){
 }
 async function ud(id){
   const u=users.find(x=>x.id==id),its=await col('items');
-  const lg=(await col('logs')).filter(x=>x.uid==id).sort((a,b)=>b.at-a.at),ib=(await col('inbox')).filter(x=>x.uid==id&&x.type!='signup').sort((a,b)=>b.at-a.at);
+  const lg=(await col('logs')).filter(x=>x.uid==id).sort((a,b)=>b.at-a.at),ib=(await col('inbox')).filter(x=>x.uid==id&&x.type!='signup'&&x.type!='reset_done').sort((a,b)=>b.at-a.at);
   $('#m').innerHTML=`<button class="b g" onclick=set()>戻る</button><div class=card><h3>${e(u.last+' '+u.first)}${u.banned?' (停止中)':''}</h3><p>ログインID: ${e(u.sid)}<br>シリアルコード: ${e(u.serial)}<br>登録日: ${fmt(u.createdAt)}${u.agreedAt?`<br>規約への同意: ${fmt(u.agreedAt)}`:''}</p>
   <div class=row><button class=b onclick="edU('${id}')">名前を変更</button><button class="b ${u.banned?'':'r'}" onclick="ban('${id}',${!u.banned})">${u.banned?'停止を解除':'BAN(停止)'}</button><button class="b r" onclick="rmU('${id}')">アカウント削除</button></div></div>
   <h3>見たファイル</h3>${lg.map(x=>`<div class=s>${fmt(x.at)} / ${e(its.find(i=>i.id==x.itemId)?.name||'(削除済)')}</div>`).join('')||'<p class=s>なし</p>'}
-  <h3>送信したメッセージ</h3>${ib.map(x=>`<div class=card><span class=s>${fmt(x.at)} / ${e(x.category||'退会')}</span><div style=white-space:pre-wrap>${e(x.body)}</div></div>`).join('')||'<p class=s>なし</p>'}`;
+  <h3>送信したメッセージ</h3>${ib.map(x=>`<div class=card><span class=s>${fmt(x.at)} / ${e(x.category||TN[x.type])}</span>${x.subject?`<div><b>${e(x.subject)}</b></div>`:''}<div style=white-space:pre-wrap>${e(x.body||x.note||'')}</div></div>`).join('')||'<p class=s>なし</p>'}`;
 }
 async function edU(id){const u=users.find(x=>x.id==id),o=await ask('名前を変更',[{l:'姓',n:'l',v:u.last},{l:'名',n:'f',v:u.first}]);if(!o)return;await db.doc('users/'+id).update({last:o.l,first:o.f});set()}
 async function ban(id,v){await db.doc('users/'+id).update({banned:v});set()}
-async function rmU(id){if(confirm('このアカウントを削除しますか?(元に戻せません)')){await db.doc('users/'+id).delete();set()}}
+// アカウント削除: 学籍番号も空くので、同じ学籍番号で新しく登録し直せます(新しいシリアルコードが必要)
+async function rmU(id){
+  const u=users.find(x=>x.id==id);
+  if(!confirm('このアカウントを削除しますか?(元に戻せません)\n削除すると、同じ学籍番号で新しく登録できるようになります。'))return;
+  const b=db.batch();b.delete(db.doc('users/'+id));b.delete(db.doc('sids/'+(u.sidKey||(u.sid||'').toLowerCase())));
+  [u.authUid,id].filter((v,i,a)=>v&&a.indexOf(v)==i).forEach(a=>b.delete(db.doc('authmap/'+a)));
+  await b.commit();set();
+}
 </script></body></html>

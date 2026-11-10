@@ -57,24 +57,76 @@ const mail=id=>id.toLowerCase()+'@hayaken.app';
 const pwOK=p=>p.length>=8&&[/[a-z]/,/[A-Z]/,/\d/,/[^A-Za-z0-9]/].filter(r=>r.test(p)).length>=2;
 const PWMSG='他のサービスと同じパスワードの使いまわしは避けてください。8文字以上で、大文字・小文字・数字・記号のうち2種類以上を使ってください。';
 const days=x=>x?Math.ceil((new Date(x+'T23:59:59')-new Date())/864e5):null;
-let U=null,P=null,items=[],path=[],tab='shelf',busy=false,cur=null,LR={};
+const rnd=()=>Math.random().toString(36).slice(2,8);
+let U=null,P=null,PID=null,HM=false,items=[],path=[],tab='shelf',busy=false,cur=null,LR={};
 const show=h=>$('#app').innerHTML=h;
-const err=m=>{const x=$('#er');if(x)x.textContent=m};
+const err=(m,ok)=>{const x=$('#er');if(x){x.textContent=m;x.style.color=ok?'#166534':''}};
+loadLegal();
 
 /* ---------- ログイン・新規登録 ---------- */
 function loginView(m=''){show(`<div class=auth><div class=box><h1 class=lg>はやけん教材ビューアー</h1><p class=sub>ログインしてください</p>
 <label>ログインID(学籍番号)</label><input id=li autocomplete=username>
 <label>パスワード</label><input id=lp type=password autocomplete=current-password onkeydown="if(event.key=='Enter')doLogin()">
 <p id=er class=err>${e(m)}</p><button class="b big" onclick=doLogin()>ログイン</button>
+<p style="text-align:center;margin:10px 0"><a href=# onclick="resetView();return false" style="color:#1d4ed8;font-size:14px">パスワードを忘れた方はこちら</a></p>
 <div class=or>はじめての方</div><button class="b g big" onclick=regView()>新規登録</button></div></div>`)}
-async function doLogin(){try{await auth.signInWithEmailAndPassword(mail($v('#li').trim()),$v('#lp'))}catch(x){err('IDまたはパスワードが違います')}}
+async function doLogin(){
+  const sid=$v('#li').trim();if(!/^[A-Za-z0-9]+$/.test(sid))return err('IDまたはパスワードが違います');
+  try{
+    let em=mail(sid);
+    try{const s=await db.doc('sids/'+sid.toLowerCase()).get();if(s.exists)em=s.data().email}catch(x){}
+    await auth.signInWithEmailAndPassword(em,$v('#lp'));
+  }catch(x){err('IDまたはパスワードが違います')}
+}
 
+/* ---------- パスワードを忘れたとき ---------- */
+function resetView(mode='req'){show(`<div class=auth><div class=box><h1 class=lg>パスワードを忘れたとき</h1>
+<div class=two style="margin:10px 0 16px"><button class="b ${mode=='req'?'':'g'}" onclick="resetView('req')">1. 申請する</button><button class="b ${mode=='code'?'':'g'}" onclick="resetView('code')">2. コードを入力</button></div>
+${mode=='req'?`<p class=sub>学籍番号を入力して申請すると、管理者(はやけん)に届きます。本人確認のあと、リセット用のコード(8桁)を教えてもらえます。申請したあとは、画面を閉じても大丈夫です。</p>
+<label>学籍番号</label><input id=rs><label>管理者へのメモ(任意)</label><input id=rn placeholder="例:次の授業で会えます">
+<p id=er class=err></p><button class="b big" onclick=reqReset()>申請する</button>`:
+`<p class=sub>管理者から教えてもらったコードで、新しいパスワードを設定します。コードは発行から7日間使えます。申請のときと同じ画面でなくても大丈夫です。</p>
+<label>学籍番号</label><input id=rs><label>リセットコード(8桁)</label><input id=rc inputmode=numeric maxlength=8>
+<label>新しいパスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
+<label>新しいパスワード(確認)</label><input id=p2 type=password>
+<p id=er class=err></p><button class="b big" onclick=doReset()>パスワードを再設定</button>`}
+<button class="b g big" onclick="loginView()">ログインに戻る</button></div></div>`)}
+async function reqReset(){
+  const sid=$v('#rs').trim();if(!/^[A-Za-z0-9]+$/.test(sid))return err('学籍番号を入力してください');
+  try{await db.collection('inbox').add({type:'reset',sid:sid.toLowerCase(),note:$v('#rn'),at:Date.now()});
+    err('申請しました。管理者からコードを受け取ったら、「2. コードを入力」へ進んでください。',true)}
+  catch(x){err('申請できませんでした。しばらくしてからもう一度お試しください')}
+}
+async function doReset(){
+  const sk=$v('#rs').trim().toLowerCase(),code=$v('#rc').trim(),p=$v('#p1');
+  if(!/^[a-z0-9]+$/.test(sk)||!/^\d{8}$/.test(code))return err('学籍番号とコード(8桁)を入力してください');
+  if(!pwOK(p))return err('パスワードが条件を満たしていません');
+  if(p!==$v('#p2'))return err('確認用パスワードが一致しません');
+  const key=sk+'_'+code;let r=null;
+  try{r=await db.doc('resets/'+key).get()}catch(x){}
+  if(!r||!r.exists||r.data().exp<Date.now())return err('コードが違うか、期限が切れています');
+  const pid=r.data().pid,email=sk+'-'+rnd()+'@hayaken.app';busy=true;let c;
+  try{c=await auth.createUserWithEmailAndPassword(email,p)}catch(x){busy=false;return err('再設定できませんでした。もう一度お試しください')}
+  try{
+    const b=db.batch(),uid=c.user.uid;
+    b.update(db.doc('users/'+pid),{authUid:uid,resetKey:key});
+    b.set(db.doc('sids/'+sk),{pid,email,resetKey:key});
+    b.set(db.doc('authmap/'+uid),{pid});
+    b.delete(db.doc('resets/'+key));
+    b.set(db.collection('inbox').doc(),{type:'reset_done',uid:pid,sid:sk,at:Date.now()});
+    await b.commit();
+  }catch(x){await c.user.delete();busy=false;return err('再設定できませんでした。もう一度お試しください')}
+  busy=false;boot(c.user);
+}
+
+/* ---------- 新規登録 ---------- */
 function regView(){LR={};show(`<div class=auth><div class=box><h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>
 <div class=two><div><label>姓</label><input id=ln></div><div><label>名</label><input id=fn></div></div>
 <label>学籍番号(ログインIDになります)</label><input id=sid>
 <label>パスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
 <label>パスワード(確認)</label><input id=p2 type=password>
 <label>シリアルコード(8桁)</label><input id=sc inputmode=numeric maxlength=8>
+<p class=s style="margin:-8px 0 14px">シリアルコードは、はやけんに聞いて、教えてもらってください。</p>
 <p class=s style="margin:0 0 6px">登録するには、2つとも開いて内容を確認してください</p>
 <div class=two><button class="b g" id=lt onclick="rdLegal('t')">利用規約を読む</button><button class="b g" id=lp2 onclick="rdLegal('p')">プライバシーポリシーを読む</button></div>
 <p id=er class=err></p>
@@ -91,45 +143,67 @@ async function doReg(){
   if(!pwOK(p))return err('パスワードが条件を満たしていません');
   if(p!==$v('#p2'))return err('確認用パスワードが一致しません');
   if(!/^\d{8}$/.test(sc))return err('シリアルコードは8桁の数字です');
-  const bt=$('#rb');bt.disabled=true;busy=true;let c;
-  try{c=await auth.createUserWithEmailAndPassword(mail(sid),p)}catch(x){busy=false;bt.disabled=false;return err('この学籍番号は登録済みか、使えない文字が含まれています')}
+  const sk=sid.toLowerCase(),bt=$('#rb');
+  try{if((await db.doc('sids/'+sk).get()).exists)return err('この学籍番号は、すでに登録されています')}catch(x){}
+  const email=sk+'-'+rnd()+'@hayaken.app';bt.disabled=true;busy=true;let c;
+  try{c=await auth.createUserWithEmailAndPassword(email,p)}catch(x){busy=false;bt.disabled=false;return err('登録できませんでした。もう一度お試しください')}
   try{
-    const b=db.batch();
-    b.update(db.doc('serials/'+sc),{usedBy:c.user.uid});
-    b.set(db.doc('users/'+c.user.uid),{last:ln,first:fn,sid,serial:sc,banned:false,createdAt:Date.now(),agreedAt:Date.now(),agreedVer:APP_VERSION});
-    b.set(db.collection('inbox').doc(),{type:'signup',uid:c.user.uid,name:ln+' '+fn,sid,serial:sc,at:Date.now()});
+    const uid=c.user.uid,b=db.batch();
+    b.update(db.doc('serials/'+sc),{usedBy:uid});
+    b.set(db.doc('users/'+uid),{last:ln,first:fn,sid,sidKey:sk,serial:sc,authUid:uid,banned:false,createdAt:Date.now(),agreedAt:Date.now(),agreedVer:APP_VERSION});
+    b.set(db.doc('authmap/'+uid),{pid:uid});
+    b.set(db.doc('sids/'+sk),{pid:uid,email,createdAt:Date.now()});
+    b.set(db.collection('inbox').doc(),{type:'signup',uid,name:ln+' '+fn,sid,serial:sc,at:Date.now()});
     await b.commit();
   }catch(x){await c.user.delete();busy=false;bt.disabled=false;return err('シリアルコードが無効か、すでに使われています')}
   busy=false;boot(c.user);
 }
 auth.onAuthStateChanged(u=>{if(busy)return;u?boot(u):loginView()});
 async function boot(u){
-  const s=await db.doc('users/'+u.uid).get();
-  if(!s.exists||s.data().banned){await auth.signOut();return loginView('このアカウントは利用できません')}
-  U=u;P=s.data();tab='shelf';path=[];cur=null;render();
+  let pid=u.uid;HM=false;
+  try{const m=await db.doc('authmap/'+u.uid).get();if(m.exists){pid=m.data().pid;HM=true}}catch(x){}
+  let s=null;try{s=await db.doc('users/'+pid).get()}catch(x){}
+  if(!s||!s.exists||s.data().banned){await auth.signOut();return loginView('このアカウントは利用できません')}
+  U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;render();
 }
 function render(){
   show(`<header>はやけん教材ビューアー</header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,me})[tab]();
+  if(tab=='shelf')showImportant();
+}
+
+/* ---------- 重要なお知らせ(本棚を開くたびに表示。「今後表示しない」で非表示) ---------- */
+const hidKey=id=>'hide_'+PID+'_'+id;
+const isHid=id=>{try{return localStorage.getItem(hidKey(id))}catch(x){return null}};
+async function showImportant(){
+  if($('#imp'))return;
+  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.genre=='重要なお知らせ'&&(n.to.includes('all')||n.to.includes(PID))&&!isHid(n.id)).sort((a,b)=>b.createdAt-a.createdAt);
+  if(!l.length||$('#imp'))return;
+  const d=document.createElement('dialog');d.id='imp';
+  d.innerHTML=`<h3 style="color:#dc2626;margin-top:0">重要なお知らせ</h3><div style="max-height:60vh;overflow:auto">${l.map(n=>`<div class=card><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div><div style="white-space:pre-wrap;margin:8px 0">${e(n.body)}</div><label><input type=checkbox class=hd value="${n.id}">今後表示しない</label></div>`).join('')}</div><button class="b big" onclick="$('#imp').close()">閉じる</button>`;
+  d.onclose=()=>{d.querySelectorAll('.hd:checked').forEach(c=>{try{localStorage.setItem(hidKey(c.value),'1')}catch(x){}});d.remove()};
+  document.body.append(d);d.showModal();
 }
 
 /* ---------- 本棚 ---------- */
 const FOLDER='<svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-const icon=it=>it.type=='folder'?`<span class="ic f">${FOLDER}</span>`:`<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;
+const icon=it=>{if(it.type!='folder')return `<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;const c=it.color||'#d97706';return `<span class="ic f" style="background:${c}22">${FOLDER.replace('<svg','<svg style="fill:'+c+'"')}</span>`};
 function meta(it){const d=days(it.expiry);
   return `<div class=s>${it.type=='folder'?'フォルダ':it.type=='pdf'?'PDF':'テキスト'} / v${it.version} / 有効期限: ${it.expiry||'なし'}${d!==null?` <span class="${d<=7?'red':''}">(あと${d}日)</span>`:''}</div>`}
-const visible=x=>!x.to||x.to.includes('all')||x.to.includes(U.uid);
+const own=x=>!x.to||x.to.includes('all')||x.to.includes(PID);
+// フォルダは、自分が見られる中身が1つでもあれば表示される(中身だけ見られて入れない、を防ぐ)
+const visible=x=>own(x)||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
 async function shelf(){
   if(cur)return openFile(cur);
   items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
   const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
-  $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">戻る</button><h2>${e(pf?.name)}</h2><p class=s>${e(pf?.body)}</p>`:'<h2>本棚</h2>')+
+  $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">戻る</button><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:'<h2>本棚</h2>')+
    (list.map(x=>`<div class=it onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}">${icon(x)}<div><b>${e(x.name)}</b>${meta(x)}</div></div>`).join('')||'<p class=s>まだ何もありません</p>');
 }
 async function openFile(id){
   const it=items.find(x=>x.id==id);
-  db.collection('logs').add({itemId:id,uid:U.uid,name:P.last+' '+P.first,at:Date.now()});
+  db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
   $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
    ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button>':''}
    <div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
@@ -153,7 +227,7 @@ async function dl(){
       await pg.render({canvasContext:x,viewport:vp}).promise;
       x.font=Math.round(vp.width/55)+'px sans-serif';x.fillStyle='rgba(0,0,0,.5)';x.textAlign='center';x.fillText(txt,vp.width/2,vp.height*0.985);
       const img=await out.embedJpg(c.toDataURL('image/jpeg',.92));
-      out.addPage([v1.width,v1.height]).drawImage(img,{x:0,y:0,width:v1.width,height:v1.height}); // 元のPDFと同じサイズ・向き
+      out.addPage([v1.width,v1.height]).drawImage(img,{x:0,y:0,width:v1.width,height:v1.height});
     }
     w.location.href=URL.createObjectURL(new Blob([await out.save()],{type:'application/pdf'}));
   }catch(x){w.close();alert('作成できませんでした: '+(x.message||x))}
@@ -167,7 +241,7 @@ document.addEventListener('keyup',k=>{if(k.key=='PrintScreen'){navigator.clipboa
 
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
 async function news(){
-  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.to.includes('all')||n.to.includes(U.uid)).sort((a,b)=>b.createdAt-a.createdAt);
+  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.to.includes('all')||n.to.includes(PID)).sort((a,b)=>b.createdAt-a.createdAt);
   window._n=l;
   $('#m').innerHTML='<h2>お知らせ</h2>'+(l.map((n,i)=>`<div class=it onclick=nd(${i}) style="display:block"><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div></div>`).join('')||'<p class=s>お知らせはありません</p>');
 }
@@ -182,6 +256,7 @@ function me(){
   <details><summary>管理者に連絡・相談する</summary>
    <label>名前</label><input value="${e(P.last+' '+P.first)}" disabled>
    <label>内容</label><select id=cc><option>アプリの修正希望・バグ報告</option><option>ファイル(教材)の修正希望・バグ報告</option><option>その他</option></select>
+   <label>件名</label><input id=cs>
    <label>本文</label><textarea id=cb rows=4></textarea>
    <label><input type=checkbox id=cr>返信を希望する</label><p class=s>返信はお知らせページでお知らせします。内容によっては返信できない場合があります。</p>
    <button class="b big" onclick=send()>管理者に送信</button></details>
@@ -190,22 +265,26 @@ function me(){
   <div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシー</button></div>
   <button class="b g" onclick="auth.signOut()">ログアウト</button>${verHtml()}`;
 }
-async function reauth(p){await U.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(mail(P.sid),p))}
+async function reauth(p){await U.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(U.email,p))}
 async function chgPw(){
   if(!pwOK($v('#n1')))return alert('新しいパスワードが条件を満たしていません');
   if($v('#n1')!==$v('#n2'))return alert('確認用パスワードが一致しません');
   try{await reauth($v('#op'));await U.updatePassword($v('#n1'));alert('変更しました');me()}catch(x){alert('現在のパスワードが違います')}
 }
 async function send(){
-  if(!$v('#cb').trim())return alert('本文を入力してください');
-  await db.collection('inbox').add({type:'contact',uid:U.uid,name:P.last+' '+P.first,sid:P.sid,category:$v('#cc'),body:$v('#cb'),wantReply:$('#cr').checked,at:Date.now()});
+  if(!$v('#cs').trim()||!$v('#cb').trim())return alert('件名と本文を入力してください');
+  await db.collection('inbox').add({type:'contact',uid:PID,name:P.last+' '+P.first,sid:P.sid,category:$v('#cc'),subject:$v('#cs').trim(),body:$v('#cb'),wantReply:$('#cr').checked,at:Date.now()});
   alert('送信しました');me();
 }
 async function withdraw(){
   if(!confirm('本当に退会しますか?この操作は取り消せません。'))return;
   const p=prompt('確認のため現在のパスワードを入力してください');if(!p)return;
   try{await reauth(p)}catch(x){return alert('パスワードが違います')}
-  await db.collection('inbox').add({type:'withdraw',uid:U.uid,name:P.last+' '+P.first,sid:P.sid,body:$v('#wr'),at:Date.now()});
-  await db.doc('users/'+U.uid).delete();await U.delete();alert('退会しました');
+  const sk=(P.sidKey||P.sid.toLowerCase()),b=db.batch();
+  b.set(db.collection('inbox').doc(),{type:'withdraw',uid:PID,name:P.last+' '+P.first,sid:P.sid,body:$v('#wr'),at:Date.now()});
+  b.delete(db.doc('users/'+PID));
+  try{if((await db.doc('sids/'+sk).get()).exists)b.delete(db.doc('sids/'+sk))}catch(x){}
+  if(HM)b.delete(db.doc('authmap/'+U.uid));
+  await b.commit();await U.delete();alert('退会しました');
 }
 </script></body></html>

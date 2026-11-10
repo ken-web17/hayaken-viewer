@@ -1,11 +1,13 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='2.0.2',APP_DATE='2026-11-10';
+const APP_VERSION='2.1.0',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
 const G={'教材について(追加)':'#2563eb','教材について(更新)':'#2563eb','お知らせ':'#f59e0b','重要なお知らせ':'#dc2626','メッセージ':'#16a34a'};
 const verHtml=()=>`<p class="ver">はやけん教材ビューアー<br>バージョン v${APP_VERSION}(${APP_DATE})</p>`;
 
+// 管理者が編集した規約があれば、それを使う(なければ legal.js の文章)
+async function loadLegal(){try{const s=await db.doc('settings/legal').get();if(s.exists){if(s.data().terms)TERMS=s.data().terms;if(s.data().priv)PRIV=s.data().priv}}catch(x){}}
 function showLegal(t,x){
   const d=document.createElement('dialog');
   d.innerHTML=`<h3>${t}</h3><div style="white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">${e(x)}</div><p><button class="b" onclick="this.closest('dialog').remove()">閉じる</button></p>`;
