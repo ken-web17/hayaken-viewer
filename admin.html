@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>はやけん教材ビューアー【管理者】</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#d1d5db;color:#111}
+header{background:#374151;color:#fff;padding:12px 16px;font-weight:700}
+main{max-width:860px;margin:0 auto;padding:16px 16px 90px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#4b5563}
+nav button{flex:1;padding:14px;border:0;background:none;color:#d1d5db;font-size:15px;border-top:3px solid transparent}
+nav .on{color:#fff;font-weight:700;border-top-color:#fff;background:#374151}
+.card{background:#f9fafb;border-radius:6px;padding:12px;margin:8px 0;border:1px solid #9ca3af}
+input,select,textarea{width:100%;padding:10px;margin:4px 0 10px;border:1px solid #6b7280;border-radius:4px;font-size:16px}
+button.b{background:#374151;color:#fff;border:0;padding:8px 14px;border-radius:4px;font-size:14px;margin:2px}
+button.g{background:#9ca3af;color:#111}button.r{background:#b91c1c}button.on2{background:#111}
+.s{font-size:12px;color:#555}.chip{color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;margin-right:6px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}dialog{width:min(520px,92vw);border:2px solid #374151;border-radius:8px}
+.hl{border-left:5px solid #dc2626}
+</style></head><body>
+<div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#b91c1c;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js が同じ場所にあるか、設定値を貼ったか確認してください)</pre>');
+const auth=firebase.auth(),db=firebase.firestore();
+const $=s=>document.querySelector(s),$v=s=>$(s).value;
+const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const G={'教材について(追加)':'#2563eb','教材について(更新)':'#2563eb','お知らせ':'#f59e0b','重要なお知らせ':'#dc2626','メッセージ':'#16a34a'};
+const fmt=t=>new Date(t).toLocaleString('ja-JP');
+const col=async n=>(await db.collection(n).get()).docs.map(d=>({id:d.id,...d.data()}));
+let A=null,tab='shelf',sub='send',path=[],items=[],users=[];
+const show=h=>$('#app').innerHTML=h;
+
+function ask(t,fs){return new Promise(r=>{const d=document.createElement('dialog');
+  d.innerHTML=`<form method=dialog><h3>${t}</h3>${fs.map(f=>`<label>${f.l}</label>`+(f.t=='area'?`<textarea name=${f.n} rows=5>${e(f.v)}</textarea>`:`<input name=${f.n} type="${f.t||'text'}" value="${e(f.v)}" ${f.a||''}>`)).join('')}<div class=row><button class=b value=ok>OK</button><button class="b g" value=x formnovalidate>キャンセル</button></div></form>`;
+  document.body.append(d);d.showModal();
+  d.onclose=()=>{const o={};if(d.returnValue=='ok')new FormData(d.querySelector('form')).forEach((v,k)=>o[k]=v);r(d.returnValue=='ok'?o:null);d.remove()}})}
+const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
+
+function loginView(m=''){show(`<header>管理者ログイン</header><main><p style=color:#b91c1c>${e(m)}</p><label>メールアドレス</label><input id=em><label>パスワード</label><input id=pw type=password><button class=b onclick=login()>ログイン</button></main>`)}
+async function login(){try{await auth.signInWithEmailAndPassword($v('#em'),$v('#pw'))}catch(x){loginView('ログインできません')}}
+auth.onAuthStateChanged(async u=>{
+  if(!u)return loginView();
+  if(!(await db.doc('admins/'+u.uid).get()).exists){await auth.signOut();return loginView('管理者ではありません')}
+  A=u;render();
+});
+function render(){
+  show(`<header>はやけん教材ビューアー【管理者】 <button class="b g" style=float:right onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','📚 本棚'],['news','🔔 お知らせ'],['set','⚙ 設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
+  ({shelf,news,set})[tab]();
+}
+
+/* ---------- 本棚 ---------- */
+async function shelf(){
+  items=await col('items');
+  const cur=path[path.length-1]||'',f=items.find(x=>x.id==cur);
+  const list=items.filter(x=>x.parent==cur).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
+  $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">← 戻る</button>':''}<b>${path.length?'📁 '+e(f?.name):'ホーム'}</b></div>
+  <div class=row><button class=b onclick="mk('folder')">＋フォルダ</button><button class=b onclick="mk('pdf')">＋PDFアップロード</button><button class=b onclick="mk('text')">＋テキスト</button></div>`+
+  (list.map(x=>`<div class=card><b>${x.type=='folder'?'📁':x.type=='pdf'?'📄':'📝'} ${e(x.name)}</b>
+   <div class=s>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'} ｜ v${x.version} ｜ 有効期限: ${x.expiry||'なし'}</div>
+   <div class=row>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
+   <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
+}
+async function mk(type){
+  const cur=path[path.length-1]||'';
+  const fs=[];if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
+  fs.push({l:'名前',n:'nm',v:'',a:'required'},{l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''});
+  const o=await ask({folder:'フォルダ作成',pdf:'PDFアップロード',text:'テキスト作成'}[type],fs);if(!o)return;
+  if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
+  const ref=db.collection('items').doc(),b=db.batch();
+  if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+ref.id),{d:await rd(o.file)})}
+  b.set(ref,{parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()});
+  await b.commit();shelf();
+}
+async function upd(id,ver){
+  const it=items.find(x=>x.id==id),fs=[];
+  if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
+  fs.push({l:'名前',n:'nm',v:it.name,a:'required'},{l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body});
+  if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});
+  const o=await ask(ver?`新バージョン(v${it.version+1})`:'編集',fs);if(!o)return;
+  const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd};
+  if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
+    if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');b.set(db.doc('blobs/'+id),{d:await rd(o.file)})}}
+  b.update(db.doc('items/'+id),u);await b.commit();shelf();
+}
+async function del(id){
+  const it=items.find(x=>x.id==id);
+  if(items.some(x=>x.parent==id))return alert('中身が残っています。先に中身を削除してください。');
+  if(!confirm(`「${it.name}」を削除しますか?`))return;
+  await db.doc('items/'+id).delete();if(it.type=='pdf')await db.doc('blobs/'+id).delete();shelf();
+}
+async function lg(id){
+  const l=(await col('logs')).filter(x=>x.itemId==id).sort((a,b)=>b.at-a.at);
+  const d=document.createElement('dialog');d.innerHTML=`<h3>閲覧履歴</h3>${l.map(x=>`<div class=s>${fmt(x.at)} ｜ ${e(x.name)}</div>`).join('')||'まだ誰も開いていません'}<p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  document.body.append(d);d.showModal();
+}
+
+/* ---------- お知らせ ---------- */
+function subBar(){return `<div class=row>${[['send','送付'],['hist','送付済み'],['inbox','受信(連絡・登録)']].map(s=>`<button class="b ${sub==s[0]?'on2':'g'}" onclick="sub='${s[0]}';news()">${s[1]}</button>`).join('')}</div>`}
+async function news(pre){
+  users=await col('users');
+  if(sub=='send')return compose(pre);
+  if(sub=='hist'){
+    const l=(await col('notices')).sort((a,b)=>b.createdAt-a.createdAt);window._n=l;
+    $('#m').innerHTML=subBar()+(l.map((n,i)=>`<div class=card><span class=chip style="background:${G[n.genre]}">${e(n.genre)}</span><b>${e(n.subject)}</b>
+     <div class=s>${fmt(n.createdAt)} ｜ 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')}</div>
+     <div class=row><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
+    return;
+  }
+  const l=(await col('inbox')).sort((a,b)=>b.at-a.at);window._i=l;
+  $('#m').innerHTML=subBar()+(l.map((x,i)=>`<div class="card ${x.wantReply?'hl':''}"><b>${{signup:'🆕 新規登録',contact:'✉ 連絡・相談',withdraw:'👋 退会'}[x.type]}</b> ${e(x.name)} (${e(x.sid)}) <span class=s>${fmt(x.at)}</span>
+   ${x.type=='signup'?`<div class=s>シリアルコード: ${e(x.serial)}</div>`:`<div class=s>${e(x.category||'')}${x.wantReply?' 【返信希望】':''}</div><div style="white-space:pre-wrap">${e(x.body)}</div>`}
+   <div class=row>${x.type=='contact'?`<button class=b onclick="reply(${i})">返信</button>`:''}<button class="b g" onclick="delI('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>受信はありません</p>');
+}
+function reply(i){const x=_i[i];sub='send';news({to:[x.uid],genre:'メッセージ',subject:'Re: '+x.category,body:''})}
+async function delN(id){if(confirm('削除しますか?')){await db.doc('notices/'+id).delete();news()}}
+async function delI(id){if(confirm('削除しますか?')){await db.doc('inbox/'+id).delete();news()}}
+function compose(p={}){
+  const to=p.to||[],all=to.includes('all');
+  $('#m').innerHTML=subBar()+`<div class=card><h3>${p.id?'お知らせを編集':'お知らせを送付'}</h3>
+  <label>件名</label><input id=sj value="${e(p.subject)}">
+  <label>ジャンル</label><select id=gn>${Object.keys(G).map(g=>`<option ${p.genre==g?'selected':''}>${g}</option>`).join('')}</select>
+  <label>本文</label><textarea id=bd rows=6>${e(p.body)}</textarea>
+  <label>送り先</label><div class=row><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=true)">すべて選択</button><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=false)">選択解除</button></div>
+  ${users.map(u=>`<label style="display:block"><input type=checkbox class=rc value="${u.id}" style="width:auto" ${all||to.includes(u.id)?'checked':''}> ${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}
+  <button class=b onclick="sendN('${p.id||''}')">${p.id?'更新':'送付'}</button></div>`;
+}
+async function sendN(id){
+  const ch=[...document.querySelectorAll('.rc:checked')].map(c=>c.value);
+  if(!$v('#sj').trim()||!$v('#bd').trim()||!ch.length)return alert('件名・本文・送り先を入力してください');
+  const d={subject:$v('#sj'),genre:$v('#gn'),body:$v('#bd'),to:ch.length==users.length?['all']:ch};
+  id?await db.doc('notices/'+id).update(d):await db.collection('notices').add({...d,createdAt:Date.now()});
+  alert('送付しました');sub='hist';news();
+}
+
+/* ---------- 設定 ---------- */
+async function set(){
+  users=await col('users');const sr=await col('serials');
+  $('#m').innerHTML=`<h3>登録ユーザー</h3><input id=q placeholder="名前・学籍番号で検索" oninput=ul()><div id=ul></div>
+  <h3>シリアルコード</h3><button class=b onclick=gen()>新しいコードを発行</button><div id=sl>${sr.sort((a,b)=>b.createdAt-a.createdAt).map(s=>{const u=users.find(x=>x.id==s.usedBy);return `<div class=s>${s.id} ｜ ${s.usedBy?'使用済み: '+e(u?u.last+' '+u.first:'(退会済)'):'未使用'}</div>`}).join('')}</div>`;
+  ul();
+}
+function ul(){const q=$v('#q').toLowerCase();
+  $('#ul').innerHTML=users.filter(u=>(u.last+u.first+u.sid).toLowerCase().includes(q)).map(u=>`<div class=card onclick="ud('${u.id}')" style=cursor:pointer><b>${e(u.last+' '+u.first)}</b>${u.banned?' 🚫BAN中':''}<div class=s>ID: ${e(u.sid)} ｜ シリアル: ${e(u.serial)}</div></div>`).join('')||'<p class=s>該当なし</p>'}
+async function gen(){
+  let c;do{c=String(Math.floor(Math.random()*1e8)).padStart(8,'0')}while((await db.doc('serials/'+c).get()).exists);
+  await db.doc('serials/'+c).set({usedBy:null,createdAt:Date.now()});alert('発行しました: '+c);set();
+}
+async function ud(id){
+  const u=users.find(x=>x.id==id),its=await col('items');
+  const lg=(await col('logs')).filter(x=>x.uid==id).sort((a,b)=>b.at-a.at),ib=(await col('inbox')).filter(x=>x.uid==id&&x.type!='signup').sort((a,b)=>b.at-a.at);
+  $('#m').innerHTML=`<button class="b g" onclick=set()>← 戻る</button><div class=card><h3>${e(u.last+' '+u.first)} ${u.banned?'🚫':''}</h3><p>ログインID: ${e(u.sid)}<br>シリアルコード: ${e(u.serial)}<br>登録日: ${fmt(u.createdAt)}</p>
+  <div class=row><button class=b onclick="edU('${id}')">名前を変更</button><button class="b ${u.banned?'':'r'}" onclick="ban('${id}',${!u.banned})">${u.banned?'BAN解除':'BAN'}</button><button class="b r" onclick="rmU('${id}')">アカウント削除</button></div></div>
+  <h4>見たファイル</h4>${lg.map(x=>`<div class=s>${fmt(x.at)} ｜ ${e(its.find(i=>i.id==x.itemId)?.name||'(削除済)')}</div>`).join('')||'<p class=s>なし</p>'}
+  <h4>送信したメッセージ</h4>${ib.map(x=>`<div class=card><span class=s>${fmt(x.at)} ｜ ${e(x.category||'退会')}</span><div style=white-space:pre-wrap>${e(x.body)}</div></div>`).join('')||'<p class=s>なし</p>'}`;
+}
+async function edU(id){const u=users.find(x=>x.id==id),o=await ask('名前を変更',[{l:'姓',n:'l',v:u.last},{l:'名',n:'f',v:u.first}]);if(!o)return;await db.doc('users/'+id).update({last:o.l,first:o.f});set()}
+async function ban(id,v){await db.doc('users/'+id).update({banned:v});set()}
+async function rmU(id){if(confirm('このアカウントを削除しますか?(元に戻せません)')){await db.doc('users/'+id).delete();set()}}
+</script></body></html>

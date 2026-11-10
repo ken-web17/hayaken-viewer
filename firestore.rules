@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{d}/documents {
+    function si() { return request.auth != null; }
+    function adm() { return si() && exists(/databases/$(d)/documents/admins/$(request.auth.uid)); }
+
+    match /admins/{u} { allow read: if si() && request.auth.uid == u; }
+
+    match /users/{u} {
+      allow read: if si() && (request.auth.uid == u || adm());
+      allow create: if si() && request.auth.uid == u
+        && get(/databases/$(d)/documents/serials/$(request.resource.data.serial)).data.usedBy == null;
+      allow update: if adm();
+      allow delete: if adm() || (si() && request.auth.uid == u);
+    }
+
+    match /serials/{s} {
+      allow read, create: if adm();
+      allow update: if si() && resource.data.usedBy == null && request.resource.data.usedBy == request.auth.uid;
+    }
+
+    match /items/{i}   { allow read: if si(); allow write: if adm(); }
+    match /blobs/{i}   { allow read: if si(); allow write: if adm(); }
+    match /notices/{i} { allow read: if si(); allow write: if adm(); }
+    match /logs/{i}    { allow create: if si(); allow read: if adm(); }
+    match /inbox/{i}   { allow create: if si(); allow read, update, delete: if adm(); }
+  }
+}

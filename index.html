@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>はやけん教材ビューアー</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#f0f6ff;color:#1f2937}
+header{background:#2563eb;color:#fff;padding:12px 16px;font-weight:700}
+main{max-width:760px;margin:0 auto;padding:16px 16px 90px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #ccc}
+nav button{flex:1;padding:14px;border:0;background:none;font-size:15px;border-top:3px solid transparent}
+nav .on{color:#2563eb;font-weight:700;border-top-color:#2563eb}
+.card{background:#fff;border-radius:10px;padding:12px;margin:8px 0;box-shadow:0 1px 3px #0002;cursor:pointer}
+input,select,textarea{width:100%;padding:10px;margin:4px 0 10px;border:1px solid #bbb;border-radius:6px;font-size:16px}
+button.b{background:#2563eb;color:#fff;border:0;padding:10px 16px;border-radius:6px;font-size:15px;margin:2px}
+button.g{background:#6b7280}button.r{background:#dc2626}
+.red{color:#dc2626;font-weight:700}.s{font-size:12px;color:#666}.err{color:#dc2626}
+.chip{color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;margin-right:6px}
+#pv canvas{width:100%;display:block;margin:6px 0;border:1px solid #ccc}
+.nosel{user-select:none;-webkit-user-select:none}
+@media print{body{display:none!important}}
+</style></head><body>
+<div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#dc2626;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js が同じ場所にあるか、設定値を貼ったか確認してください)</pre>');
+// PDFを開くときだけ pdf.js を読み込む(読み込めなくても他の画面は動く)
+function loadPdfJs(){return new Promise((ok,ng)=>{if(window.pdfjsLib)return ok();const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok()};
+  s.onerror=ng;document.head.append(s)})}
+const auth=firebase.auth(),db=firebase.firestore();
+const $=s=>document.querySelector(s),$v=s=>$(s).value;
+const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const mail=id=>id.toLowerCase()+'@hayaken.app';
+const G={'教材について(追加)':'#2563eb','教材について(更新)':'#2563eb','お知らせ':'#f59e0b','重要なお知らせ':'#dc2626','メッセージ':'#16a34a'};
+const pwOK=p=>p.length>=8&&[/[a-z]/,/[A-Z]/,/\d/,/[^A-Za-z0-9]/].filter(r=>r.test(p)).length>=2;
+const PWMSG='※他のサービスと同じパスワードの使いまわしは避けてください。8文字以上で、大文字・小文字・数字・記号のうち2種類以上を使ってください。';
+const fmt=t=>new Date(t).toLocaleString('ja-JP');
+const days=x=>x?Math.ceil((new Date(x+'T23:59:59')-new Date())/864e5):null;
+let U=null,P=null,items=[],path=[],tab='shelf',busy=false,cur=null;
+const show=h=>$('#app').innerHTML=h;
+
+function loginView(m=''){show(`<main><h2>はやけん教材ビューアー</h2><p class=err>${e(m)}</p>
+<label>ログインID(学籍番号)</label><input id=li autocomplete=username>
+<label>パスワード</label><input id=lp type=password autocomplete=current-password>
+<button class=b onclick=doLogin()>ログイン</button><button class="b g" onclick=regView()>新規登録</button></main>`)}
+async function doLogin(){try{await auth.signInWithEmailAndPassword(mail($v('#li').trim()),$v('#lp'))}catch(x){loginView('IDまたはパスワードが違います')}}
+
+function regView(m=''){show(`<main><h2>新規登録</h2><p class=err>${m}</p>
+<label>姓</label><input id=ln><label>名</label><input id=fn>
+<label>学籍番号(ログインIDになります)</label><input id=sid>
+<label>パスワード</label><input id=p1 type=password><p class=s>${PWMSG}</p>
+<label>パスワード(確認)</label><input id=p2 type=password>
+<label>シリアルコード(8桁)</label><input id=sc inputmode=numeric maxlength=8>
+<button class=b onclick=doReg()>登録</button><button class="b g" onclick="loginView()">戻る</button></main>`)}
+async function doReg(){
+  const ln=$v('#ln').trim(),fn=$v('#fn').trim(),sid=$v('#sid').trim(),p=$v('#p1'),sc=$v('#sc').trim();
+  if(!ln||!fn||!sid||!p||!sc)return regView('すべて入力してください');
+  if(!/^[A-Za-z0-9]+$/.test(sid))return regView('学籍番号は英数字で入力してください');
+  if(!pwOK(p))return regView('パスワードが条件を満たしていません');
+  if(p!==$v('#p2'))return regView('確認用パスワードが一致しません');
+  if(!/^\d{8}$/.test(sc))return regView('シリアルコードは8桁の数字です');
+  busy=true;let c;
+  try{c=await auth.createUserWithEmailAndPassword(mail(sid),p)}catch(x){busy=false;return regView('この学籍番号は登録済みか、使えない文字が含まれています')}
+  try{
+    const b=db.batch();
+    b.update(db.doc('serials/'+sc),{usedBy:c.user.uid});
+    b.set(db.doc('users/'+c.user.uid),{last:ln,first:fn,sid,serial:sc,banned:false,createdAt:Date.now()});
+    b.set(db.collection('inbox').doc(),{type:'signup',uid:c.user.uid,name:ln+' '+fn,sid,serial:sc,at:Date.now()});
+    await b.commit();
+  }catch(x){await c.user.delete();busy=false;return regView('シリアルコードが無効か、すでに使われています')}
+  busy=false;boot(c.user);
+}
+
+auth.onAuthStateChanged(u=>{if(busy)return;u?boot(u):loginView()});
+async function boot(u){
+  const s=await db.doc('users/'+u.uid).get();
+  if(!s.exists||s.data().banned){await auth.signOut();return loginView('このアカウントは利用できません')}
+  U=u;P=s.data();tab='shelf';path=[];cur=null;render();
+}
+function render(){
+  show(`<header>はやけん教材ビューアー</header><main id=m></main><nav>${[['shelf','📚 本棚'],['news','🔔 お知らせ'],['me','👤 マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
+  ({shelf,news,me})[tab]();
+}
+
+/* ---------- 本棚 ---------- */
+function meta(it){const d=days(it.expiry);
+  return `<div class=s>${it.type=='folder'?'フォルダ':it.type=='pdf'?'PDF':'テキスト'} ｜ v${it.version} ｜ 有効期限: ${it.expiry||'なし'}${d!==null?` <span class="${d<=7?'red':''}">(あと${d}日)</span>`:''}</div>`}
+async function shelf(){
+  if(cur)return openFile(cur);
+  items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
+  const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
+  const list=items.filter(x=>x.parent==parent&&!(days(x.expiry)<0)).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
+  $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">← 戻る</button><h3>📁 ${e(pf?.name)}</h3><p class=s>${e(pf?.body)}</p>`:'<h3>本棚</h3>')+
+   (list.map(x=>`<div class=card onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}"><b>${x.type=='folder'?'📁':x.type=='pdf'?'📄':'📝'} ${e(x.name)}</b>${meta(x)}</div>`).join('')||'<p class=s>まだ何もありません</p>');
+}
+async function openFile(id){
+  const it=items.find(x=>x.id==id);
+  db.collection('logs').add({itemId:id,uid:U.uid,name:P.last+' '+P.first,at:Date.now()});
+  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">← 戻る</button><h3>${e(it.name)}</h3>${meta(it)}
+   <div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'読み込み中…':`<div class=card style="white-space:pre-wrap;cursor:auto">${e(it.body)}</div>`}</div>
+   ${it.type=='pdf'?`<div class=card style="cursor:auto;white-space:pre-wrap">${e(it.body)}</div><button class=b onclick=pr()>🖨 印刷</button>`:''}
+   <p><button class="b g" style="font-size:11px;padding:4px 8px" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>
+   <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} ｜ ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
+  if(it.type!='pdf')return;
+  try{
+    await loadPdfJs();
+    const b=(await db.doc('blobs/'+id).get()).data().d;
+    const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(b),c=>c.charCodeAt(0))}).promise;
+    $('#pv').innerHTML='';
+    for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.6}),c=document.createElement('canvas');
+      c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;$('#pv').append(c)}
+  }catch(x){$('#pv').textContent='表示できませんでした'}
+}
+function pr(){
+  const w=open('','_blank');
+  const pages=[...document.querySelectorAll('#pv canvas')].map(c=>`<div style="position:relative;page-break-after:always"><img src="${c.toDataURL('image/jpeg',.9)}" style="width:100%;display:block"><div style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:rgba(0,0,0,.45);font:14px sans-serif">${e(P.last+' '+P.first)} / ${e(P.serial)}</div></div>`).join('');
+  w.document.write(`<body style="margin:0">${pages}`);w.document.close();setTimeout(()=>w.print(),600);
+}
+// スクリーンショット対策(完全には防げません): 画面から離れる/印刷キーで隠す
+document.addEventListener('visibilitychange',()=>{document.body.style.filter=document.hidden?'blur(20px)':''});
+window.addEventListener('blur',()=>document.body.style.filter='blur(20px)');
+window.addEventListener('focus',()=>document.body.style.filter='');
+document.addEventListener('keyup',k=>{if(k.key=='PrintScreen'){navigator.clipboard?.writeText('');alert('スクリーンショットは禁止されています')}});
+
+/* ---------- お知らせ ---------- */
+async function news(){
+  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.to.includes('all')||n.to.includes(U.uid)).sort((a,b)=>b.createdAt-a.createdAt);
+  window._n=l;
+  $('#m').innerHTML='<h3>お知らせ</h3>'+(l.map((n,i)=>`<div class=card onclick=nd(${i})><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div></div>`).join('')||'<p class=s>お知らせはありません</p>');
+}
+function nd(i){const n=_n[i];$('#m').innerHTML=`<button class="b g" onclick=news()>← 戻る</button><h3>${e(n.subject)}</h3><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><span class=s>${fmt(n.createdAt)}</span><div class=card style="white-space:pre-wrap;cursor:auto">${e(n.body)}</div>`}
+
+/* ---------- マイページ ---------- */
+function me(){
+  $('#m').innerHTML=`<h3>マイページ</h3><div class=card style="cursor:auto">
+   <p>名前: ${e(P.last+' '+P.first)}</p><p>ログインID: ${e(P.sid)}</p><p>シリアルコード: ${e(P.serial)}</p>
+   <p>パスワード: ●●●●●●●● <button class=b onclick="$('#pw').hidden=!$('#pw').hidden">変更</button></p>
+   <div id=pw hidden><input id=op type=password placeholder=現在のパスワード><input id=n1 type=password placeholder=新しいパスワード><input id=n2 type=password placeholder=新しいパスワード(確認)>
+   <p class=s>${PWMSG}</p><button class=b onclick=chgPw()>パスワードを変更</button></div></div>
+   <h3>管理者に連絡・相談する</h3><div class=card style="cursor:auto">
+   <label>名前</label><input value="${e(P.last+' '+P.first)}" disabled>
+   <label>内容</label><select id=cc><option>アプリの修正希望・バグ報告</option><option>ファイル(教材)の修正希望・バグ報告</option><option>その他</option></select>
+   <label>本文</label><textarea id=cb rows=4></textarea>
+   <label><input type=checkbox id=cr style="width:auto"> 返信を希望する(お知らせページでお知らせします。内容によっては返信できない場合があります)</label><br>
+   <button class=b onclick=send()>管理者に送信</button></div>
+   <h3>退会</h3><div class=card style="cursor:auto"><label>退会の理由・ご意見(任意)</label><textarea id=wr rows=3></textarea>
+   <button class="b r" onclick=withdraw()>退会・アカウント削除</button></div>
+   <p><button class="b g" onclick="auth.signOut()">ログアウト</button></p>`;
+}
+async function reauth(p){await U.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(mail(P.sid),p))}
+async function chgPw(){
+  if(!pwOK($v('#n1')))return alert('新しいパスワードが条件を満たしていません');
+  if($v('#n1')!==$v('#n2'))return alert('確認用パスワードが一致しません');
+  try{await reauth($v('#op'));await U.updatePassword($v('#n1'));alert('変更しました');me()}catch(x){alert('現在のパスワードが違います')}
+}
+async function send(){
+  if(!$v('#cb').trim())return alert('本文を入力してください');
+  await db.collection('inbox').add({type:'contact',uid:U.uid,name:P.last+' '+P.first,sid:P.sid,category:$v('#cc'),body:$v('#cb'),wantReply:$('#cr').checked,at:Date.now()});
+  alert('送信しました');me();
+}
+async function withdraw(){
+  if(!confirm('本当に退会しますか?この操作は取り消せません。'))return;
+  const p=prompt('確認のため現在のパスワードを入力してください');if(!p)return;
+  try{await reauth(p)}catch(x){return alert('パスワードが違います')}
+  await db.collection('inbox').add({type:'withdraw',uid:U.uid,name:P.last+' '+P.first,sid:P.sid,body:$v('#wr'),at:Date.now()});
+  await db.doc('users/'+U.uid).delete();await U.delete();alert('退会しました');
+}
+</script></body></html>
