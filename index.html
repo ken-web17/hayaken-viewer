@@ -28,7 +28,7 @@ input[type=checkbox]{width:auto;margin:0 8px 0 0}
 .card{background:#fff;border-radius:14px;padding:16px;margin:10px 0;box-shadow:0 1px 3px #0001}
 .it{display:flex;gap:14px;align-items:center;background:#fff;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px #0001;cursor:pointer}
 .ic{flex:none;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
-.ic.f{background:#fef3c7}.ic.f{position:relative}.ic.f svg{width:30px;fill:#d97706}.ic.f .mk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;padding-top:4px}.ic.pdf{background:#fee2e2;color:#b91c1c}.ic.text{background:#dbeafe;color:#1d4ed8}
+.ic.f{background:#fef3c7}.ic.f{position:relative}.ic.f svg{width:30px;fill:#d97706}.ic.f .mk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;padding-top:4px}.ic.pdf{background:#fee2e2;color:#b91c1c}.ic.text{background:#dbeafe;color:#1d4ed8}
 .s{font-size:12px;color:#64748b}.err{color:#dc2626;font-size:13px;min-height:18px;margin:6px 0}.red{color:#dc2626;font-weight:800}
 .chip{color:#fff;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:700;margin-right:8px}
 .or{text-align:center;color:#94a3b8;font-size:12px;margin:14px 0 6px}
@@ -205,11 +205,12 @@ function meta(it){const d=days(it.expiry);
 const lvl=x=>(!x.to||x.to.includes('all')||x.to.includes(PID))?'v':(x.pv&&(x.pv.includes('all')||x.pv.includes(PID)))?'p':'n'; // v=見れる p=プレビュー n=見れない
 // フォルダは、自分が見られる中身が1つでもあれば表示される(中身だけ見られて入れない、を防ぐ)
 const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
+const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 async function shelf(){
   if(cur)return openFile(cur);
   items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
-  const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name));
+  const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort(byOrd);
   $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">戻る</button><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:'<h2>本棚</h2>')+
    (list.map(x=>`<div class=it onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}">${icon(x)}<div style="flex:1"><b>${e(x.name)}</b>${meta(x)}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ(閲覧はリクエストが必要)</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`).join('')||'<p class=s>まだ何もありません</p>');
 }

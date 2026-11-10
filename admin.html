@@ -29,6 +29,7 @@ input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
 .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:2px 7px;background:#4b5563;color:#fff;margin-right:6px}
 .ver{text-align:center;color:#6b7280;font-size:12px;margin:26px 0 0;line-height:1.7}
 .sw{margin-bottom:10px}.sw input{display:none}.sw span{display:inline-block;width:30px;height:30px;border-radius:50%;margin:4px;border:3px solid transparent;cursor:pointer}.sw input:checked+span{border-color:#111}
+.b:disabled{opacity:.35;cursor:not-allowed}
 .dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;font-weight:800;margin-right:6px;vertical-align:middle}
 dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
 </style></head><body>
@@ -48,6 +49,7 @@ const col=async n=>(await db.collection(n).get()).docs.map(d=>({id:d.id,...d.dat
 const COLORS=['#d97706','#dc2626','#16a34a','#2563eb','#7c3aed','#db2777','#0891b2','#475569'];
 let A=null,tab='shelf',sub='send',flt='all',path=[],items=[],users=[],RS=[];
 const show=h=>$('#app').innerHTML=h;
+const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 const byName=(a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 
 /* 入力ダイアログ(いろいろな種類の入力欄に対応) */
@@ -118,14 +120,22 @@ async function shelf(){
   const nt=items.filter(x=>!x.to); // 古いデータに公開範囲を自動で付ける
   if(nt.length){const b=db.batch();nt.forEach(x=>{b.update(db.doc('items/'+x.id),{to:['all']});x.to=['all']});await b.commit()}
   const cur=path[path.length-1]||'',f=items.find(x=>x.id==cur);
-  const list=items.filter(x=>x.parent==cur).sort(byName);
+  const list=items.filter(x=>x.parent==cur).sort(byOrd);
   $('#m').innerHTML=`<div class=row>${path.length?'<button class="b g" onclick="path.pop();shelf()">戻る</button>':''}<h2 style=margin:0>${path.length?e(f?.name):'本棚'}</h2></div>
   <div class=row style=margin:12px 0><button class=b onclick="mk('folder')">フォルダを作る</button><button class=b onclick="mk('pdf')">PDFをアップロード</button><button class=b onclick="mk('text')">テキストを作る</button></div><div id=busy></div>`+
-  (list.map(x=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}">${e(x.mark||'')}</span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
+  (list.map((x,i)=>`<div class=card>${x.type=='folder'?`<span class=dot style="background:${x.color||COLORS[0]}">${e(x.mark||'')}</span>`:''}<span class=tag>${x.type=='folder'?'フォルダ':x.type=='pdf'?'PDF':'テキスト'}</span><b>${e(x.name)}</b>
    <div class=s>v${x.version} / 有効期限: ${x.expiry||'なし'} / ${lvTxt(x)}</div>
-   <div class=row style=margin-top:8px>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
+   <div class=row style=margin-top:8px><button class="b g" onclick="mvo('${x.id}',-1)" ${i==0?'disabled':''}>上へ</button><button class="b g" onclick="mvo('${x.id}',1)" ${i==list.length-1?'disabled':''}>下へ</button>${x.type=='folder'?`<button class=b onclick="path.push('${x.id}');shelf()">開く</button>`:`<button class=b onclick="vw('${x.id}')">内容を見る</button><button class=b onclick="upd('${x.id}',true)">新バージョン</button><button class="b g" onclick="lg('${x.id}')">閲覧履歴</button>`}
    <button class="b g" onclick="upd('${x.id}',false)">編集</button><button class="b g" onclick="cp('${x.id}')">コピー</button><button class="b g" onclick="mv('${x.id}')">移動</button><button class="b r" onclick="del('${x.id}')">削除</button></div></div>`).join('')||'<p class=s>空です</p>');
   genMissing();
+}
+// 表示順を1つ上・下に動かす(同じフォルダの中のファイル・フォルダ全部に順番を付け直す)
+async function mvo(id,d){
+  const cur=path[path.length-1]||'',l=items.filter(x=>x.parent==cur).sort(byOrd),i=l.findIndex(x=>x.id==id),j=i+d;
+  if(i<0||j<0||j>=l.length)return;
+  [l[i],l[j]]=[l[j],l[i]];
+  const b=db.batch();l.forEach((x,k)=>b.update(db.doc('items/'+x.id),{order:k*10}));
+  await b.commit();shelf();
 }
 function folderOpts(excl){ // 「ホーム / A / B」の形で、選べるフォルダ一覧を作る(自分自身とその中は除く)
   const out=[{id:'',label:'ホーム'}];
@@ -170,7 +180,7 @@ async function upd(id,ver){
   shelf();
 }
 async function copyTree(id,dest,nm){
-  const it=items.find(x=>x.id==id),ref=db.collection('items').doc(),d={...it};delete d.id;
+  const it=items.find(x=>x.id==id),ref=db.collection('items').doc(),d={...it};delete d.id;delete d.order;
   Object.assign(d,{parent:dest,name:nm??it.name,version:1,history:[{v:1,at:Date.now(),note:'コピー'}],createdAt:Date.now()});
   const b=db.batch();
   if(it.type=='pdf'){const s=await db.doc('blobs/'+id).get();if(s.exists)b.set(db.doc('blobs/'+ref.id),s.data());const ps=await db.doc('previews/'+id).get();if(ps.exists)b.set(db.doc('previews/'+ref.id),ps.data());d.pvImg=ps.exists}
@@ -190,7 +200,7 @@ async function mv(id){
   const it=items.find(x=>x.id==id);
   const o=await ask('移動',[{l:'移動先',n:'dest',t:'sel',opts:folderOpts(it.type=='folder'?id:null),v:it.parent}]);if(!o||o.dest==it.parent)return;
   if(items.some(x=>x.parent==o.dest&&x.name==it.name&&x.type==it.type))return alert('移動先に同じ名前があります。先に名前を変えてください。');
-  await db.doc('items/'+id).update({parent:o.dest});shelf();
+  await db.doc('items/'+id).update({parent:o.dest,order:firebase.firestore.FieldValue.delete()});shelf();
 }
 async function del(id){
   const it=items.find(x=>x.id==id);
