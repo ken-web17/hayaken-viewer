@@ -24,16 +24,30 @@ button.g{background:#9ca3af;color:#111}button.r{background:#b91c1c}button.on2{ba
 <script src="firebase-config.js"></script>
 <script>
 window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#b91c1c;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js が同じ場所にあるか、設定値を貼ったか確認してください)</pre>');
-const PB='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-function loadPdfJs(){return new Promise((ok,ng)=>{if(window.pdfjsLib)return ok();const s=document.createElement('script');
-  s.src=PB+'pdf.min.js';
-  s.onload=async()=>{try{const t=await(await fetch(PB+'pdf.worker.min.js')).text();pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'text/javascript'}))}catch(x){pdfjsLib.GlobalWorkerOptions.workerSrc=PB+'pdf.worker.min.js'}ok()};
-  s.onerror=()=>ng(new Error('pdf.js を読み込めません(ネットワークや拡張機能を確認)'));document.head.append(s)})}
+const PS=[
+ ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/','cmaps/'],
+ ['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/','../cmaps/'],
+ ['https://unpkg.com/pdfjs-dist@3.11.174/build/','../cmaps/']];
+let PC='';
+const ldScript=src=>new Promise((ok,ng)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>{s.remove();ng()};document.head.append(s)});
+async function loadPdfJs(){
+  if(window.pdfjsLib)return;
+  const tried=[];
+  for(const [b,cm] of PS){
+    try{
+      await ldScript(b+'pdf.min.js');
+      try{const t=await(await fetch(b+'pdf.worker.min.js')).text();pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'text/javascript'}))}
+      catch(x){pdfjsLib.GlobalWorkerOptions.workerSrc=b+'pdf.worker.min.js'}
+      PC=b+cm;return;
+    }catch(x){tried.push(new URL(b).host)}
+  }
+  throw new Error('pdf.js を読み込めません(試した場所: '+tried.join(', ')+')。ネットワークや拡張機能のブロックを確認してください');
+}
 async function renderPdf(id,box){
   await loadPdfJs();
   const s=await db.doc('blobs/'+id).get();
   if(!s.exists)throw new Error('PDFデータが見つかりません。管理者サイトで再アップロードしてください');
-  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(s.data().d),c=>c.charCodeAt(0)),cMapUrl:PB+'cmaps/',cMapPacked:true}).promise;
+  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(s.data().d),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
   box.innerHTML='';
   for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1.6}),c=document.createElement('canvas');
     c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;box.append(c)}
