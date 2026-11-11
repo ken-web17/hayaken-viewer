@@ -52,6 +52,10 @@ dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}
 .tile b{font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 .tile .ic{width:68px;height:68px;font-size:14px;border-radius:16px}.tile .ic.f svg{width:46px}.tile .ic.f .mk{font-size:16px;padding-top:6px}
 .tile .lk.tl{position:absolute;top:10px;right:10px}
+.fsx{display:none}
+#pvw.full{position:fixed;inset:0;z-index:1000;background:#1e293b;overflow:auto;padding:0 12px 24px}
+#pvw.full .fsx{display:block;position:sticky;top:0;z-index:2;margin:10px 0 8px auto}
+#pvw.full #pv{max-width:1000px;margin:0 auto}
 .nosel{user-select:none;-webkit-user-select:none}
 dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::backdrop{background:#0008}
 @media print{body{display:none!important}}
@@ -61,10 +65,12 @@ dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::ba
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js"></script>
-<script src="legal.js"></script>
+<script src="common.js?v=2.6.0"></script>
+<script src="legal.js?v=2.6.0"></script>
 <script>
-window.onerror=m=>document.body.insertAdjacentHTML('afterbegin','<pre style="color:#dc2626;padding:12px;white-space:pre-wrap">エラー: '+m+'\n(firebase-config.js・common.js・legal.js が同じ場所にあるか確認してください)</pre>');
+function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
+window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
+window.addEventListener('unhandledrejection',ev=>window.onerror('読み込み中に問題が起きました: '+((ev.reason&&ev.reason.message)||ev.reason)));
 // 利用者サイトは標準のFirebaseアプリを使う(管理者サイトは別名のアプリなのでログインが干渉しません)
 const auth=firebase.auth(),db=firebase.firestore();
 const mail=id=>id.toLowerCase()+'@hayaken.app';
@@ -235,8 +241,8 @@ async function openFile(id){
   if(lvl(it)=='n'){cur=null;return shelf()}
   db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
   $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
-   ${it.type=='pdf'?'<button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button><div id=dlmsg></div>':''}
-   <div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div>
+   ${it.type=='pdf'?'<div class=two><button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button><button class="b g big" onclick=fsOpen()>全画面表示</button></div><div id=dlmsg></div>':''}
+   <div id=pvw><button class="b g fsx" onclick=fsClose()>全画面を閉じる</button><div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div></div>
    <p><button class="b g mini" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>
    <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} / ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
   if(it.type!='pdf')return;
@@ -261,6 +267,13 @@ async function reqAccess(id){
   try{await db.doc('requests/'+PID+'_'+id).set({pid:PID,itemId:id,itemName:it.name,name:P.last+' '+P.first,sid:P.sid,status:'pending',at:Date.now()});lockedState(it)}
   catch(x){alert('送信できませんでした。しばらくしてからもう一度お試しください')}
 }
+// PDFの全画面表示(パソコンは本当の全画面、スマホなどは画面いっぱいの表示)
+function fsOpen(){
+  $('#pvw').classList.add('full');document.body.style.overflow='hidden';
+  try{const p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();if(p&&p.catch)p.catch(()=>{})}catch(x){}
+}
+function fsClose(){$('#pvw')?.classList.remove('full');document.body.style.overflow='';try{if(document.fullscreenElement)document.exitFullscreen()}catch(x){}}
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)fsClose()});
 // 名前とシリアルコードを入れた新しいPDFを作り、別タブで開く(ダウンロード・印刷はそのタブのボタンから)
 async function dl(){
   if(!PDFDOC)return alert('PDFがまだ表示されていません');
