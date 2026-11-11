@@ -1,13 +1,17 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='2.4.0',APP_DATE='2026-11-10';
+const APP_VERSION='2.5.0',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
 const G={'教材について(追加)':'#2563eb','教材について(更新)':'#2563eb','お知らせ':'#f59e0b','重要なお知らせ':'#dc2626','メッセージ':'#16a34a'};
-const verHtml=()=>`<p class="ver">はやけん教材ビューアー<br>バージョン v${APP_VERSION}(${APP_DATE})</p>`;
+const verHtml=()=>`<p class="ver">Bribly(ぶりぶりー)<br>バージョン v${APP_VERSION}(${APP_DATE})</p>`;
 
 // 管理者が編集した規約があれば、それを使う(なければ legal.js の文章)
 async function loadLegal(){try{const s=await db.doc('settings/legal').get();if(s.exists){if(s.data().terms)TERMS=s.data().terms;if(s.data().priv)PRIV=s.data().priv}}catch(x){}}
+/* ロゴ: 開いた本のマーク + 「Bribly」 */
+const logoSvg=(s=32,bg='#1d4ed8',fg='#fff')=>`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 40 40" style="vertical-align:middle;flex:none"><rect width="40" height="40" rx="10" fill="${bg}"/><path d="M8 12c4-2 8-2 12 1v16c-4-3-8-3-12-1zM32 12c-4-2-8-2-12 1v16c4-3 8-3 12-1z" fill="${fg}"/></svg>`;
+const brandHtml=(bg,fg,small)=>`<div class="brand${small?' sm':''}">${logoSvg(small?30:44,bg,fg)}<span>Bribly</span></div>`;
+try{document.head.insertAdjacentHTML('beforeend','<link rel="icon" href="data:image/svg+xml;base64,'+btoa(logoSvg(64))+'">')}catch(x){}
 function showLegal(t,x){
   const d=document.createElement('dialog');
   d.innerHTML=`<h3>${t}</h3><div style="white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">${e(x)}</div><p><button class="b" onclick="this.closest('dialog').remove()">閉じる</button></p>`;

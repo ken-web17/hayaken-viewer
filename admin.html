@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>はやけん教材ビューアー 管理者</title>
+<title>Bribly 管理者</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif;background:#e5e7eb;color:#111827}
@@ -29,6 +29,7 @@ input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
 .tag{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:2px 7px;background:#4b5563;color:#fff;margin-right:6px}
 .ver{text-align:center;color:#6b7280;font-size:12px;margin:26px 0 0;line-height:1.7}
 .sw{margin-bottom:10px}.sw input{display:none}.sw span{display:inline-block;width:30px;height:30px;border-radius:50%;margin:4px;border:3px solid transparent;cursor:pointer}.sw input:checked+span{border-color:#111}
+.brand{display:flex;align-items:center;gap:10px;font-size:28px;font-weight:800;color:#111827}
 .b:disabled{opacity:.35;cursor:not-allowed}
 .dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;font-weight:800;margin-right:6px;vertical-align:middle}
 dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
@@ -100,7 +101,7 @@ async function genMissing(){ // プレビュー画像がない・古い形式の
 }
 const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
 
-function loginView(m=''){show(`<div class=auth><div class=box><h1 class=lg>管理者ログイン</h1>
+function loginView(m=''){show(`<div class=auth><div class=box>${brandHtml('#1f2937')}<h1 class=lg style="margin-top:14px">管理者ログイン</h1>
 <label>メールアドレス</label><input id=em autocomplete=username><label>パスワード</label><input id=pw type=password autocomplete=current-password onkeydown="if(event.key=='Enter')login()">
 <p class=err>${e(m)}</p><button class="b big" onclick=login()>ログイン</button></div></div>`)}
 async function login(){try{await auth.signInWithEmailAndPassword($v('#em'),$v('#pw'))}catch(x){loginView('ログインできません')}}
@@ -110,7 +111,7 @@ auth.onAuthStateChanged(async u=>{
   A=u;loadLegal();render();
 });
 function render(){
-  show(`<header><span>はやけん教材ビューアー<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<header><span style="display:flex;align-items:center;gap:10px">${logoSvg(28,'#fff','#1f2937')}Bribly<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,set})[tab]();
 }
 
@@ -231,7 +232,7 @@ async function news(pre){
   if(sub=='hist'){
     const l=(await col('notices')).sort((a,b)=>b.createdAt-a.createdAt);window._n=l;
     $('#m').innerHTML=subBar()+(l.map((n,i)=>`<div class=card><span class=chip style="background:${G[n.genre]}">${e(n.genre)}</span><b>${e(n.subject)}</b>
-     <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')}</div>
+     <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')} / ${n.to.includes('all')||n.future?'今後の登録者にも表示':'今後の登録者には非表示'}</div>
      <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
@@ -278,19 +279,21 @@ async function apv(i,ok){
   await b.commit();news();
 }
 function compose(p={}){
-  const to=p.to||[],all=to.includes('all');
+  const to=p.to||[],all=to.includes('all'),fut=p.to?(all||!!p.future):true;
   $('#m').innerHTML=subBar()+`<div class=card><h3>${p.id?'お知らせを編集':'お知らせを送付'}</h3>
   <label>件名</label><input id=sj value="${e(p.subject)}">
   <label>ジャンル</label><select id=gn>${Object.keys(G).map(g=>`<option ${p.genre==g?'selected':''}>${g}</option>`).join('')}</select>
   <label>本文</label><textarea id=bd rows=6>${e(p.body)}</textarea>
   <label>送り先</label><div class=row><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=true)">すべて選択</button><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=false)">選択解除</button></div>
   <div class=who>${users.map(u=>`<label class=rl><input type=checkbox class=rc value="${u.id}" ${all||to.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}</div>
+  <label class=rl><input type=checkbox id=fut ${fut?'checked':''}>これより後に登録した人にも表示する</label><p class=s>オフにすると、いま登録している人だけに表示されます。</p>
   <button class="b big" onclick="sendN('${p.id||''}')">${p.id?'更新する':'送付する'}</button></div>`;
 }
 async function sendN(id){
   const ch=[...document.querySelectorAll('.rc:checked')].map(c=>c.value);
   if(!$v('#sj').trim()||!$v('#bd').trim()||!ch.length)return alert('件名・本文・送り先を入力してください');
-  const d={subject:$v('#sj'),genre:$v('#gn'),body:$v('#bd'),to:ch.length==users.length?['all']:ch};
+  const fut=$('#fut').checked,allSel=ch.length==users.length;
+  const d={subject:$v('#sj'),genre:$v('#gn'),body:$v('#bd'),to:allSel&&fut?['all']:ch,future:fut&&!allSel};
   id?await db.doc('notices/'+id).update(d):await db.collection('notices').add({...d,createdAt:Date.now()});
   alert('送付しました');sub='hist';news();
 }

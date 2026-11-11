@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>はやけん教材ビューアー</title>
+<title>Bribly</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,"Hiragino Sans","Yu Gothic",sans-serif;background:#f1f5f9;color:#0f172a}
 .auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(150deg,#1e3a8a,#2563eb 55%,#38bdf8)}
 .box{background:#fff;border-radius:20px;padding:30px 24px;width:100%;max-width:430px;box-shadow:0 24px 60px #0005}
 .lg{margin:0 0 4px;font-size:24px;color:#1e3a8a}.sub{margin:0 0 18px;color:#64748b;font-size:13px}
-header{background:#1e3a8a;color:#fff;padding:14px 18px;font-weight:800;font-size:17px}
+header{background:#1e3a8a;color:#fff;padding:12px 18px;font-weight:800;font-size:19px;display:flex;align-items:center;gap:10px}
 main{max-width:760px;margin:0 auto;padding:18px 16px 96px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;gap:6px;padding:8px;background:#fff;border-top:1px solid #e2e8f0}
 nav button{flex:1;padding:13px;border:0;border-radius:10px;background:none;font-size:15px;font-weight:700;color:#64748b}
@@ -44,6 +44,14 @@ dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}
 .lockbox{position:relative;border-radius:14px;overflow:hidden;background:#e2e8f0;margin:12px 0;min-height:220px}.lockbox img{width:100%;display:block}
 .fake{height:300px;background:repeating-linear-gradient(#cbd5e1 0 10px,#e2e8f0 10px 26px)}
 .lkov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#0f172a99;color:#fff;text-align:center;padding:16px}.lkov svg{width:60px;fill:#fff}
+.brand{display:flex;align-items:center;gap:10px;font-size:30px;font-weight:800;color:#1e3a8a;letter-spacing:.5px}.brand.sm{font-size:20px;margin-bottom:6px}.kana{font-size:12px;color:#64748b;margin:0 0 14px 54px}
+.row2{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.seg{display:inline-flex;background:#e2e8f0;border-radius:10px;padding:3px}.seg button{border:0;background:none;padding:7px 12px;border-radius:8px;font-size:13px;font-weight:700;color:#64748b}.seg .on{background:#fff;color:#1d4ed8;box-shadow:0 1px 2px #0002}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:10px}
+.tile{position:relative;aspect-ratio:1;background:#fff;border-radius:18px;box-shadow:0 1px 3px #0001;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;text-align:center;cursor:pointer}
+.tile b{font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.tile .ic{width:68px;height:68px;font-size:14px;border-radius:16px}.tile .ic.f svg{width:46px}.tile .ic.f .mk{font-size:16px;padding-top:6px}
+.tile .lk.tl{position:absolute;top:10px;right:10px}
 .nosel{user-select:none;-webkit-user-select:none}
 dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::backdrop{background:#0008}
 @media print{body{display:none!important}}
@@ -63,6 +71,7 @@ const mail=id=>id.toLowerCase()+'@hayaken.app';
 const pwOK=p=>p.length>=8&&[/[a-z]/,/[A-Z]/,/\d/,/[^A-Za-z0-9]/].filter(r=>r.test(p)).length>=2;
 const PWMSG='他のサービスと同じパスワードの使いまわしは避けてください。8文字以上で、大文字・小文字・数字・記号のうち2種類以上を使ってください。';
 const days=x=>x?Math.ceil((new Date(x+'T23:59:59')-new Date())/864e5):null;
+const forMe=n=>n.to.includes('all')||n.to.includes(PID)||(n.future&&(P.createdAt||0)>n.createdAt);
 const rnd=()=>Math.random().toString(36).slice(2,8);
 let U=null,P=null,PID=null,HM=false,items=[],path=[],tab='shelf',busy=false,cur=null,LR={};
 const show=h=>$('#app').innerHTML=h;
@@ -70,7 +79,7 @@ const err=(m,ok)=>{const x=$('#er');if(x){x.textContent=m;x.style.color=ok?'#166
 loadLegal();
 
 /* ---------- ログイン・新規登録 ---------- */
-function loginView(m=''){show(`<div class=auth><div class=box><h1 class=lg>はやけん教材ビューアー</h1><p class=sub>ログインしてください</p>
+function loginView(m=''){show(`<div class=auth><div class=box>${brandHtml('#1d4ed8')}<p class=kana>ぶりぶりー</p><p class=sub>ログインしてください</p>
 <label>ログインID(学籍番号)</label><input id=li autocomplete=username>
 <label>パスワード</label><input id=lp type=password autocomplete=current-password onkeydown="if(event.key=='Enter')doLogin()">
 <p id=er class=err>${e(m)}</p><button class="b big" onclick=doLogin()>ログイン</button>
@@ -86,7 +95,7 @@ async function doLogin(){
 }
 
 /* ---------- パスワードを忘れたとき ---------- */
-function resetView(mode='req'){show(`<div class=auth><div class=box><h1 class=lg>パスワードを忘れたとき</h1>
+function resetView(mode='req'){show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>パスワードを忘れたとき</h1>
 <div class=two style="margin:10px 0 16px"><button class="b ${mode=='req'?'':'g'}" onclick="resetView('req')">1. 申請する</button><button class="b ${mode=='code'?'':'g'}" onclick="resetView('code')">2. コードを入力</button></div>
 ${mode=='req'?`<p class=sub>学籍番号を入力して申請すると、管理者(はやけん)に届きます。本人確認のあと、リセット用のコード(8桁)を教えてもらえます。申請したあとは、画面を閉じても大丈夫です。</p>
 <label>学籍番号</label><input id=rs><p id=er class=err></p><button class="b big" onclick=reqReset()>申請する</button>`:
@@ -130,7 +139,7 @@ async function doReset(){
 }
 
 /* ---------- 新規登録 ---------- */
-function regView(){LR={};show(`<div class=auth><div class=box><h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>
+function regView(){LR={};show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>
 <div class=two><div><label>姓</label><input id=ln></div><div><label>名</label><input id=fn></div></div>
 <label>学籍番号(ログインIDになります)</label><input id=sid>
 <label>パスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
@@ -179,7 +188,7 @@ async function boot(u){
   U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;render();
 }
 function render(){
-  show(`<header>はやけん教材ビューアー</header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,me})[tab]();
   if(tab=='shelf')showImportant();
 }
@@ -189,7 +198,7 @@ const hidKey=id=>'hide_'+PID+'_'+id;
 const isHid=id=>{try{return localStorage.getItem(hidKey(id))}catch(x){return null}};
 async function showImportant(){
   if($('#imp'))return;
-  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.genre=='重要なお知らせ'&&(n.to.includes('all')||n.to.includes(PID))&&!isHid(n.id)).sort((a,b)=>b.createdAt-a.createdAt);
+  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.genre=='重要なお知らせ'&&forMe(n)&&!isHid(n.id)).sort((a,b)=>b.createdAt-a.createdAt);
   if(!l.length||$('#imp'))return;
   const d=document.createElement('dialog');d.id='imp';
   d.innerHTML=`<h3 style="color:#dc2626;margin-top:0">重要なお知らせ</h3><div style="max-height:60vh;overflow:auto">${l.map(n=>`<div class=card><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div><div style="white-space:pre-wrap;margin:8px 0">${e(n.body)}</div><label><input type=checkbox class=hd value="${n.id}">今後表示しない</label></div>`).join('')}</div><button class="b big" onclick="$('#imp').close()">閉じる</button>`;
@@ -206,13 +215,19 @@ const lvl=x=>(!x.to||x.to.includes('all')||x.to.includes(PID))?'v':(x.pv&&(x.pv.
 // フォルダは、自分が見られる中身が1つでもあれば表示される(中身だけ見られて入れない、を防ぐ)
 const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
 const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
+let VIEW=(()=>{try{return localStorage.getItem('bribly_view')||'list'}catch(x){return 'list'}})();
+function setView(v){VIEW=v;try{localStorage.setItem('bribly_view',v)}catch(x){}shelf()}
 async function shelf(){
   if(cur)return openFile(cur);
   items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
   const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort(byOrd);
-  $('#m').innerHTML=(path.length?`<button class="b g" onclick="path.pop();shelf()">戻る</button><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:'<h2>本棚</h2>')+
-   (list.map(x=>`<div class=it onclick="${x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`}">${icon(x)}<div style="flex:1"><b>${e(x.name)}</b>${meta(x)}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ(閲覧はリクエストが必要)</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`).join('')||'<p class=s>まだ何もありません</p>');
+  const go=x=>x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`;
+  const seg=`<div class=seg><button class="${VIEW=='list'?'on':''}" onclick="setView('list')">リスト</button><button class="${VIEW=='tile'?'on':''}" onclick="setView('tile')">タイル</button></div>`;
+  const head=path.length?`<div class=row2><button class="b g" onclick="path.pop();shelf()">戻る</button>${seg}</div><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:`<div class=row2><h2 style="margin:6px 0">本棚</h2>${seg}</div>`;
+  const row=x=>`<div class=it onclick="${go(x)}">${icon(x)}<div style="flex:1"><b>${e(x.name)}</b>${meta(x)}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ(閲覧はリクエストが必要)</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`;
+  const tile=x=>{const d=days(x.expiry);return `<div class=tile onclick="${go(x)}">${icon(x)}<b>${e(x.name)}</b>${d!==null?`<span class="s ${d<=7?'red':''}">あと${d}日</span>`:'<span class=s>&nbsp;</span>'}${lvl(x)=='p'?`<span class="lk tl">${LOCK}</span>`:''}</div>`};
+  $('#m').innerHTML=head+(list.length?(VIEW=='tile'?`<div class=tiles>${list.map(tile).join('')}</div>`:list.map(row).join('')):'<p class=s>まだ何もありません</p>');
 }
 async function openFile(id){
   const it=items.find(x=>x.id==id);
@@ -279,7 +294,7 @@ document.addEventListener('contextmenu',ev=>{if(ev.target.closest&&ev.target.clo
 
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
 async function news(){
-  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(n=>n.to.includes('all')||n.to.includes(PID)).sort((a,b)=>b.createdAt-a.createdAt);
+  const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(forMe).sort((a,b)=>b.createdAt-a.createdAt);
   window._n=l;
   $('#m').innerHTML='<h2>お知らせ</h2>'+(l.map((n,i)=>`<div class=it onclick=nd(${i}) style="display:block"><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div></div>`).join('')||'<p class=s>お知らせはありません</p>');
 }
