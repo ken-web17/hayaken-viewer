@@ -1,5 +1,5 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='2.6.0',APP_DATE='2026-11-10';
+const APP_VERSION='3.0.0',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
@@ -11,7 +11,8 @@ async function loadLegal(){try{const s=await db.doc('settings/legal').get();if(s
 /* ロゴ: 開いた本のマーク + 「Bribly」 */
 const logoSvg=(s=32,bg='#1d4ed8',fg='#fff')=>`<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 40 40" style="vertical-align:middle;flex:none"><rect width="40" height="40" rx="10" fill="${bg}"/><path d="M8 12c4-2 8-2 12 1v16c-4-3-8-3-12-1zM32 12c-4-2-8-2-12 1v16c4-3 8-3 12-1z" fill="${fg}"/></svg>`;
 const brandHtml=(bg,fg,small)=>`<div class="brand${small?' sm':''}">${logoSvg(small?30:44,bg,fg)}<span>Bribly</span></div>`;
-try{document.head.insertAdjacentHTML('beforeend','<link rel="icon" href="data:image/svg+xml;base64,'+btoa(logoSvg(64))+'">')}catch(x){}
+function setFavicon(bg){try{let l=document.querySelector('link[rel=icon]');if(!l){l=document.createElement('link');l.rel='icon';document.head.append(l)}l.href='data:image/svg+xml;base64,'+btoa(logoSvg(64,bg))}catch(x){}}
+setFavicon('#1d4ed8');
 function showLegal(t,x){
   const d=document.createElement('dialog');
   d.innerHTML=`<h3>${t}</h3><div style="white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">${e(x)}</div><p><button class="b" onclick="this.closest('dialog').remove()">閉じる</button></p>`;
@@ -37,6 +38,14 @@ async function loadLib(k){
     return;
   }
   throw new Error('必要な部品を読み込めません。ネットワークや拡張機能のブロックを確認してください');
+}
+// PDFを読み込む(画面には出さない)。ビューア「ひらく」用
+async function getPdf(id){
+  await loadLib('pdfjs');
+  const s=await db.doc('blobs/'+id).get();
+  if(!s.exists)throw new Error('PDFデータが見つかりません。管理者サイトで再アップロードしてください');
+  PDFDOC=await pdfjsLib.getDocument({data:Uint8Array.from(atob(s.data().d),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
+  return PDFDOC;
 }
 async function renderPdf(id,box,wm){
   await loadLib('pdfjs');

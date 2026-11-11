@@ -59,14 +59,42 @@ dl{margin:0;display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:14px}
 .nosel{user-select:none;-webkit-user-select:none}
 dialog{width:min(560px,94vw);border:0;border-radius:16px;padding:20px}dialog::backdrop{background:#0008}
 @media print{body{display:none!important}}
+[hidden]{display:none!important}
+.ib{padding:9px 12px;display:inline-flex;align-items:center;justify-content:center}
+.syncb{margin-left:auto;background:none;border:0;color:#fff;padding:6px;border-radius:10px;display:flex}.syncb.spin svg{animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.seg button{display:inline-flex;align-items:center}
+.sbar{margin:8px 0 6px}.sin{display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:0 6px 0 12px;box-shadow:0 1px 3px #0001;color:#94a3b8}
+.sin input,.sin input:focus{border:0;margin:0;padding:12px 4px;flex:1;background:none;border-radius:0;min-width:0}
+.sf{border:0;background:none;color:#64748b;padding:8px;border-radius:10px;display:flex}
+.spn{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.spn select{margin:0;padding:10px;font-size:14px}
+.gc{display:inline-block;color:#fff;font-size:10px;font-weight:700;border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+.tile .gc{margin:0}
+.openb{display:flex;align-items:center;justify-content:center;gap:10px;font-size:20px;padding:18px;margin:14px 0}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#0f172af0;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;z-index:1300;max-width:90%;text-align:center}
+.viewer{position:fixed;inset:0;z-index:1000;background:#1e293b;display:flex;flex-direction:column;color:#fff}
+.vbar{display:flex;align-items:center;gap:4px;padding:6px 8px;padding-top:max(6px,env(safe-area-inset-top));background:#0f172a}
+.vt{flex:1;min-width:0;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vpn{font-size:12px;color:#94a3b8;margin-right:4px}
+.vi{background:none;border:0;color:#fff;padding:8px;border-radius:10px;display:flex}.vi:active{background:#334155}
+.vscroll{flex:1;overflow:auto;touch-action:none;background:#334155;position:relative}
+.vpages{margin:0 auto}.vld{text-align:center;color:#cbd5e1;padding:40px 12px}
+.vpg{position:relative;margin:8px 0;background:#fff;line-height:0}.vpg canvas{position:absolute;inset:0;width:100%;height:100%}
+.vpg .mkl{mix-blend-mode:multiply;opacity:.5}.vstl{position:absolute;inset:0}
+.stk{position:absolute;transform:translate(-50%,-50%);min-width:30px;min-height:30px;padding:4px 7px;font-size:12px;line-height:1.2;color:#78350f;border-radius:6px 6px 14px 6px;box-shadow:0 2px 6px #0004;display:flex;align-items:center;justify-content:center;white-space:nowrap}
+.vdock{background:#0f172a;padding:6px 8px;padding-bottom:max(6px,env(safe-area-inset-bottom))}
+.vtools{display:flex;justify-content:space-around}.vtools button{background:none;border:0;color:#cbd5e1;padding:10px 12px;border-radius:12px;display:flex}.vtools .on{background:#2563eb;color:#fff}
+.vopt{display:flex;justify-content:center;align-items:center;gap:10px}.vopt:not(:empty){padding-bottom:8px}.vsp{width:12px}
+.dotc{width:28px;height:28px;border-radius:50%;border:3px solid transparent;padding:0}.dotc.on{border-color:#fff;box-shadow:0 0 0 1px #0006}.vmodal .dotc.on{border-color:#0f172a}
+.sdt{background:#334155;border:0;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0}.sdt i{display:block;background:#fff;border-radius:50%}.sdt.on{background:#2563eb}
+.vmodal{position:absolute;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}.vmodal .card{color:#0f172a;width:min(420px,100%);cursor:auto}
+.vmodal textarea{margin-bottom:10px}.row3{display:flex;align-items:center;gap:8px}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=2.6.0"></script>
-<script src="legal.js?v=2.6.0"></script>
+<script src="common.js?v=3.0.0"></script>
+<script src="legal.js?v=3.0.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -191,10 +219,10 @@ async function boot(u){
   try{const m=await db.doc('authmap/'+u.uid).get();if(m.exists){pid=m.data().pid;HM=true}}catch(x){}
   let s=null;try{s=await db.doc('users/'+pid).get()}catch(x){}
   if(!s||!s.exists||s.data().banned){await auth.signOut();return loginView('このアカウントは利用できません')}
-  U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;render();
+  U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;SQ.q='';SQ.g='';SQ.s='';render();
 }
 function render(){
-  show(`<header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,me})[tab]();
   if(tab=='shelf')showImportant();
 }
@@ -212,46 +240,91 @@ async function showImportant(){
   document.body.append(d);d.showModal();
 }
 
+/* ---------- アイコン ---------- */
+const IC=(d,s=22,sw=2)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+const I={close:'M6 6l12 12M18 6L6 18',back:'M15 5l-7 7 7 7',check:'M5 12l5 5 9-10',
+ hand:'M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3',
+ pen:'M3 21l3.5-1L19 7.5 16.5 5 4 17.5zM14.5 7l2.5 2.5',mk:'M15 4l5 5-9 9H6v-5zM4 21h16',er:'M4 15l9-9 6 6-9 9H7zM13 21h8',
+ stk:'M5 4h14v11l-5 5H5zM14 20v-5h5',undo:'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',trash:'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13',
+ fs:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',fsx:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',dl:'M12 4v11M7 11l5 5 5-5M5 20h14',
+ sync:'M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4',list:'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+ search:'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',sliders:'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4',open:'M5 12h14M13 6l6 6-6 6'};
+let _tt=null;
+function toast(h,sticky){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.append(t)}t.innerHTML=h;t.hidden=false;clearTimeout(_tt);if(!sticky)_tt=setTimeout(()=>t.hidden=true,2200)}
+
 /* ---------- 本棚 ---------- */
+const GENRES=['公式教材','対策プリント','ワークシート','その他'];
+const GC={'公式教材':'#2563eb','対策プリント':'#ea580c','ワークシート':'#16a34a','その他':'#64748b'};
+const gcol=g=>GC[g]||['#7c3aed','#db2777','#0891b2','#ca8a04','#475569'][[...g].reduce((a,c)=>a+c.charCodeAt(0),0)%5];
+const gchip=x=>x.genre?`<span class=gc style="background:${gcol(x.genre)}">${e(x.genre)}</span>`:'';
 const FOLDER='<svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const LOCK='<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>';
 const icon=it=>{if(it.type!='folder')return `<span class="ic ${it.type}">${it.type=='pdf'?'PDF':'TXT'}</span>`;const c=it.color||'#d97706';return `<span class="ic f" style="background:${c}22">${FOLDER.replace('<svg','<svg style="fill:'+c+'"')}${it.mark?`<b class=mk>${e(it.mark)}</b>`:''}</span>`};
 function meta(it){const d=days(it.expiry);
   return `<div class=s>${it.type=='folder'?'フォルダ':it.type=='pdf'?'PDF':'テキスト'} / v${it.version} / 有効期限: ${it.expiry||'なし'}${d!==null?` <span class="${d<=7?'red':''}">(あと${d}日)</span>`:''}</div>`}
 const lvl=x=>(!x.to||x.to.includes('all')||x.to.includes(PID))?'v':(x.pv&&(x.pv.includes('all')||x.pv.includes(PID)))?'p':'n'; // v=見れる p=プレビュー n=見れない
-// フォルダは、自分が見られる中身が1つでもあれば表示される(中身だけ見られて入れない、を防ぐ)
+// フォルダは、自分が見られる中身が1つでもあれば表示される
 const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&visible(c)));
 const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
-let VIEW=(()=>{try{return localStorage.getItem('bribly_view')||'list'}catch(x){return 'list'}})();
-function setView(v){VIEW=v;try{localStorage.setItem('bribly_view',v)}catch(x){}shelf()}
+let NM={}; // ペン・付箋を最後に書いた日時(自分用)
+async function loadItems(){items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}))}
+async function loadMeta(){try{const s=await db.doc('nmeta/'+PID).get();NM=s.exists?(s.data().m||{}):{}}catch(x){NM={}}}
+
+// 表示: 縦長の画面はリスト、横長はタイルが標準(「自動」)。自分で選ぶこともできる
+let VP=(()=>{try{return localStorage.getItem('bribly_view2')||'auto'}catch(x){return 'auto'}})();
+const portrait=()=>matchMedia('(orientation: portrait)').matches;
+const VIEW=()=>VP=='auto'?(portrait()?'list':'tile'):VP;
+function setView(v){VP=v;try{localStorage.setItem('bribly_view2',v)}catch(x){}drawShelf()}
+const SQ={q:'',g:'',s:'',open:false};
+matchMedia('(orientation: portrait)').addEventListener?.('change',()=>{if(VP=='auto'&&tab=='shelf'&&!cur&&$('#slist'))drawList()});
+
 async function shelf(){
   if(cur)return openFile(cur);
-  items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}));
-  const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
-  const list=items.filter(x=>x.parent==parent&&visible(x)&&!(days(x.expiry)<0)).sort(byOrd);
-  const go=x=>x.type=='folder'?`path.push('${x.id}');shelf()`:`cur='${x.id}';shelf()`;
-  const seg=`<div class=seg><button class="${VIEW=='list'?'on':''}" onclick="setView('list')">リスト</button><button class="${VIEW=='tile'?'on':''}" onclick="setView('tile')">タイル</button></div>`;
-  const head=path.length?`<div class=row2><button class="b g" onclick="path.pop();shelf()">戻る</button>${seg}</div><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:`<div class=row2><h2 style="margin:6px 0">本棚</h2>${seg}</div>`;
-  const row=x=>`<div class=it onclick="${go(x)}">${icon(x)}<div style="flex:1"><b>${e(x.name)}</b>${meta(x)}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ(閲覧はリクエストが必要)</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`;
-  const tile=x=>{const d=days(x.expiry);return `<div class=tile onclick="${go(x)}">${icon(x)}<b>${e(x.name)}</b>${d!==null?`<span class="s ${d<=7?'red':''}">あと${d}日</span>`:'<span class=s>&nbsp;</span>'}${lvl(x)=='p'?`<span class="lk tl">${LOCK}</span>`:''}</div>`};
-  $('#m').innerHTML=head+(list.length?(VIEW=='tile'?`<div class=tiles>${list.map(tile).join('')}</div>`:list.map(row).join('')):'<p class=s>まだ何もありません</p>');
+  await Promise.all([loadItems(),loadMeta()]);
+  drawShelf();
 }
+const crumb=x=>{const a=[];let p=items.find(i=>i.id==x.parent);while(p){a.unshift(p.name);p=items.find(i=>i.id==p.parent)}return a.join(' / ')};
+function goFolder(id){const a=[];let p=items.find(i=>i.id==id);while(p){a.unshift(p.id);p=items.find(i=>i.id==p.parent)}path=a;SQ.q='';SQ.g='';drawShelf()}
+function drawShelf(){
+  const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
+  const seg=`<div class=seg><button class="${VP=='auto'?'on':''}" onclick="setView('auto')">自動</button><button class="${VP=='list'?'on':''}" onclick="setView('list')">${IC(I.list,18)}</button><button class="${VP=='tile'?'on':''}" onclick="setView('tile')">${IC(I.grid,18)}</button></div>`;
+  const head=path.length?`<div class=row2><button class="b g ib" onclick="path.pop();drawShelf()">${IC(I.back,18)}</button>${seg}</div><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:`<div class=row2><h2 style="margin:6px 0">本棚</h2>${seg}</div>`;
+  const gs=[...new Set(items.filter(x=>x.type!='folder'&&x.genre&&visible(x)).map(x=>x.genre))];
+  const gl=[...GENRES.filter(g=>gs.includes(g)),...gs.filter(g=>!GENRES.includes(g))];
+  const bar=`<div class=sbar><div class=sin>${IC(I.search,18)}<input id=sq placeholder="さがす" value="${e(SQ.q)}" oninput="SQ.q=this.value;drawList()"><button class=sf onclick="SQ.open=!SQ.open;$('#spn').hidden=!SQ.open">${IC(I.sliders,18)}</button></div>
+  <div id=spn class=spn ${SQ.open?'':'hidden'}><select onchange="SQ.g=this.value;drawList()"><option value="">ジャンル: すべて</option>${gl.map(g=>`<option ${SQ.g==g?'selected':''}>${e(g)}</option>`).join('')}</select>
+  <select onchange="SQ.s=this.value;drawList()">${[['','並び: 標準'],['cd','作成日: 新しい順'],['ca','作成日: 古い順'],['ud','更新: 新しい順'],['ua','更新: 古い順']].map(o=>`<option value="${o[0]}" ${SQ.s==o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div></div>`;
+  $('#m').innerHTML=head+bar+'<div id=slist></div>';drawList();
+}
+function drawList(){
+  const parent=path[path.length-1]||'',q=SQ.q.trim().toLowerCase(),flat=!!(q||SQ.g);
+  let list=items.filter(x=>visible(x)&&!(days(x.expiry)<0)&&(flat?(q||x.type!='folder'):x.parent==parent));
+  if(q)list=list.filter(x=>(x.name||'').toLowerCase().includes(q)||(lvl(x)=='v'&&x.type!='text'&&(x.body||'').toLowerCase().includes(q)));
+  if(SQ.g)list=list.filter(x=>x.genre==SQ.g);
+  const cmp={cd:(a,b)=>(b.createdAt||0)-(a.createdAt||0),ca:(a,b)=>(a.createdAt||0)-(b.createdAt||0),ud:(a,b)=>(NM[b.id]||0)-(NM[a.id]||0),ua:(a,b)=>(NM[a.id]||0)-(NM[b.id]||0)}[SQ.s];
+  list.sort(cmp?((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||cmp(a,b)):byOrd);
+  const go=x=>x.type=='folder'?`goFolder('${x.id}')`:`cur='${x.id}';openFile('${x.id}')`;
+  const row=x=>`<div class=it onclick="${go(x)}">${icon(x)}<div style="flex:1;min-width:0"><b>${e(x.name)}</b>${gchip(x)}${meta(x)}${flat&&crumb(x)?`<div class=s>${e(crumb(x))}</div>`:''}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`;
+  const tile=x=>{const d=days(x.expiry);return `<div class=tile onclick="${go(x)}">${icon(x)}<b>${e(x.name)}</b>${gchip(x)||'<span class=gc style="background:none">&nbsp;</span>'}${d!==null?`<span class="s ${d<=7?'red':''}">あと${d}日</span>`:''}${lvl(x)=='p'?`<span class="lk tl">${LOCK}</span>`:''}</div>`};
+  $('#slist').innerHTML=list.length?(VIEW()=='tile'?`<div class=tiles>${list.map(tile).join('')}</div>`:list.map(row).join('')):`<p class=s>${flat?'見つかりません':'まだ何もありません'}</p>`;
+}
+
+/* ---------- ファイルの画面 ---------- */
 async function openFile(id){
   const it=items.find(x=>x.id==id);
+  if(!it){cur=null;return drawShelf()}
   if(lvl(it)=='p')return openLocked(it);
-  if(lvl(it)=='n'){cur=null;return shelf()}
-  db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
-  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
-   ${it.type=='pdf'?'<div class=two><button class="b big" id=dlb onclick=dl()>ダウンロード・印刷</button><button class="b g big" onclick=fsOpen()>全画面表示</button></div><div id=dlmsg></div>':''}
-   <div id=pvw><button class="b g fsx" onclick=fsClose()>全画面を閉じる</button><div id=pv class=nosel oncontextmenu="return false">${it.type=='pdf'?'<p class=s>読み込み中…</p>':`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}</div></div>
+  if(lvl(it)=='n'){cur=null;return drawShelf()}
+  $('#m').innerHTML=`<button class="b g ib" onclick="cur=null;drawShelf()">${IC(I.back,18)}</button><h2>${e(it.name)}</h2>${gchip(it)}${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}${meta(it)}
+   ${it.type=='pdf'?`<button class="b big openb" onclick="openViewer('${id}')">${IC(I.open,22)}<span>ひらく</span></button>`:`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}
    <p><button class="b g mini" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>
    <div id=vh hidden class=s>${(it.history||[]).slice().reverse().map(h=>`v${h.v} / ${fmt(h.at)} ${e(h.note||'')}`).join('<br>')}</div>`;
-  if(it.type!='pdf')return;
-  try{await renderPdf(id,$('#pv'),P.last+' '+P.first+'  /  '+P.serial)}catch(x){$('#pv').innerHTML='<p class=err>表示できませんでした: '+e(x.message||x)+'</p>'}
+  if(it.type!='pdf')db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
 }
-/* ---- プレビューのみのファイル(モザイク+鍵+リクエスト) ---- */
-const LOCK='<svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>';
+
+/* ---------- プレビューのみのファイル(ぼかし+鍵+リクエスト) ---------- */
 async function openLocked(it){
-  $('#m').innerHTML=`<button class="b g" onclick="cur=null;shelf()">戻る</button><h2>${e(it.name)}</h2>${meta(it)}
+  $('#m').innerHTML=`<button class="b g ib" onclick="cur=null;drawShelf()">${IC(I.back,18)}</button><h2>${e(it.name)}</h2>${gchip(it)}${meta(it)}
    <div class="lockbox nosel" oncontextmenu="return false"><div id=lkimg><div class=fake></div></div><div class=lkov>${LOCK}<b style="font-size:18px">プレビュー</b><span>このファイルを見るには、管理者の承認が必要です</span></div></div><div id=rq></div>`;
   if(it.type=='pdf'&&it.pvImg){try{const s=await db.doc('previews/'+it.id).get();if(s.exists)$('#lkimg').innerHTML=`<img src="${s.data().img}" draggable=false>`}catch(x){}}
   lockedState(it);
@@ -267,43 +340,210 @@ async function reqAccess(id){
   try{await db.doc('requests/'+PID+'_'+id).set({pid:PID,itemId:id,itemName:it.name,name:P.last+' '+P.first,sid:P.sid,status:'pending',at:Date.now()});lockedState(it)}
   catch(x){alert('送信できませんでした。しばらくしてからもう一度お試しください')}
 }
-// PDFの全画面表示(パソコンは本当の全画面、スマホなどは画面いっぱいの表示)
-function fsOpen(){
-  $('#pvw').classList.add('full');document.body.style.overflow='hidden';
-  try{const p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();if(p&&p.catch)p.catch(()=>{})}catch(x){}
+
+/* ---------- 同期 ---------- */
+async function syncNow(){
+  const b=$('#syncb');if(!b||b.classList.contains('spin'))return;b.classList.add('spin');
+  try{
+    const s=await db.doc('users/'+PID).get();if(!s.exists||s.data().banned){await auth.signOut();return}
+    P=s.data();await Promise.all([loadItems(),loadMeta()]);
+    if(tab=='shelf'){cur?openFile(cur):drawShelf()}else if(tab=='news')news();else me();
+    toast('同期しました');
+  }catch(x){toast('同期できませんでした')}
+  b.classList.remove('spin');
 }
-function fsClose(){$('#pvw')?.classList.remove('full');document.body.style.overflow='';try{if(document.fullscreenElement)document.exitFullscreen()}catch(x){}}
-document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)fsClose()});
-// 名前とシリアルコードを入れた新しいPDFを作り、別タブで開く(ダウンロード・印刷はそのタブのボタンから)
-async function dl(){
-  if(!PDFDOC)return alert('PDFがまだ表示されていません');
-  const bt=$('#dlb'),lab=bt.textContent,msg=$('#dlmsg');bt.disabled=true;msg.innerHTML='';
+
+/* ---------- ビューア「ひらく」(ペン・マーカー・消しゴム・付箋・ズーム) ---------- */
+const V={it:null,z:1,tool:'hand',pc:'#111827',pw:.0028,mc:'#facc15',mw:.02,strokes:[],stk:[],hist:[],g:null,dirty:false,bw:900};
+const PT=new Map(),cl=v=>Math.min(1,Math.max(0,v));
+const PCOL=['#111827','#dc2626','#2563eb','#16a34a'],MCOL=['#facc15','#f472b6','#38bdf8','#4ade80'],SCOL=['#fde68a','#fbcfe8','#bae6fd','#bbf7d0'];
+const PSZ=[.0016,.0028,.005],MSZ=[.012,.02,.03];
+async function openViewer(id){
+  const it=items.find(x=>x.id==id);
+  db.collection('logs').add({itemId:id,uid:PID,name:P.last+' '+P.first,at:Date.now()});
+  Object.assign(V,{it,z:1,tool:'hand',strokes:[],stk:[],hist:[],g:null,dirty:false});PT.clear();
+  const d=document.createElement('div');d.id='vw';d.className='viewer nosel';
+  d.innerHTML=`<div class=vbar><button class=vi onclick=closeViewer()>${IC(I.close)}</button><div class=vt>${e(it.name)}</div><span id=vpn class=vpn></span><button class=vi id=vfs onclick=vFs()>${IC(I.fs)}</button><button class=vi onclick=vDl()>${IC(I.dl)}</button></div>
+  <div id=vs class=vscroll><div id=vp class=vpages><p class=vld>読み込み中…</p></div></div>
+  <div class=vdock><div id=vopt class=vopt></div><div class=vtools>${[['hand',I.hand],['pen',I.pen],['mk',I.mk],['er',I.er],['stk',I.stk]].map(([k,p])=>`<button data-t=${k} onclick="setTool('${k}')">${IC(p,24)}</button>`).join('')}<button onclick=vUndo()>${IC(I.undo,24)}</button><button onclick=vClear()>${IC(I.trash,24)}</button></div></div>`;
+  document.body.append(d);document.body.style.overflow='hidden';vApply();setTool('hand');
+  const s=$('#vs');
+  s.addEventListener('pointerdown',vDown);s.addEventListener('pointermove',vMove);s.addEventListener('pointerup',vUp);s.addEventListener('pointercancel',vUp);s.addEventListener('lostpointercapture',vUp);
+  s.addEventListener('wheel',ev=>{if(ev.ctrlKey){ev.preventDefault();const r=s.getBoundingClientRect();setZoom(V.z*Math.exp(-ev.deltaY*.01),ev.clientX-r.left,ev.clientY-r.top)}},{passive:false});
+  s.addEventListener('scroll',updPn);
+  try{
+    const [pdf,nt]=await Promise.all([getPdf(id),db.doc('notes/'+PID+'_'+id).get().catch(()=>null)]);
+    if(nt&&nt.exists){V.strokes=nt.data().strokes||[];V.stk=nt.data().stk||[];if(nt.data().ver&&nt.data().ver!=it.version)toast('新しいバージョンです。書き込みを引き継ぎました')}
+    if(!$('#vw'))return;
+    const box=$('#vp');box.innerHTML='';
+    const wm=P.last+' '+P.first+'  /  '+P.serial;
+    for(let i=1;i<=pdf.numPages;i++){
+      if(!$('#vw'))return;
+      const pg=await pdf.getPage(i),v1=pg.getViewport({scale:1}),vp=pg.getViewport({scale:Math.max(1.5,Math.min(3,1200/v1.width))});
+      const w=document.createElement('div');w.className='vpg';w.dataset.p=i;w.dataset.a=v1.height/v1.width;w.style.aspectRatio=v1.width+'/'+v1.height;
+      w.innerHTML='<canvas class=pdfc></canvas><canvas class=mkl></canvas><canvas class=penl></canvas><div class=vstl></div>';
+      box.append(w);
+      w.querySelectorAll('canvas').forEach(c=>{c.width=vp.width;c.height=vp.height});
+      const x=w.querySelector('.pdfc').getContext('2d');
+      await pg.render({canvasContext:x,viewport:vp}).promise;
+      x.font=Math.round(vp.width/55)+'px sans-serif';x.fillStyle='rgba(0,0,0,.5)';x.textAlign='center';x.fillText(wm,vp.width/2,vp.height*0.985);
+      redraw(i);if(i==1)updPn();
+    }
+    drawStk();updPn();
+  }catch(x){const b=$('#vp');if(b)b.innerHTML='<p class=vld>表示できませんでした: '+e(x.message||x)+'</p>'}
+}
+async function closeViewer(){
+  clearTimeout(_st);await vFlush();
+  try{if(document.fullscreenElement)document.exitFullscreen()}catch(x){}
+  $('#vw')?.remove();document.body.style.overflow='';V.it=null;
+}
+function vFs(){const d=document.documentElement;
+  if(document.fullscreenElement)document.exitFullscreen();
+  else if(d.requestFullscreen)d.requestFullscreen().catch(()=>toast('この端末では全画面にできません'));
+  else toast('この端末では全画面にできません')}
+document.addEventListener('fullscreenchange',()=>{const b=$('#vfs');if(b)b.innerHTML=IC(document.fullscreenElement?I.fsx:I.fs)});
+document.addEventListener('gesturestart',ev=>{if($('#vw'))ev.preventDefault()},{passive:false});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&V.it)vFlush()});
+window.addEventListener('resize',()=>{if($('#vw'))vApply()});
+function updPn(){const s=$('#vs');if(!s)return;const mid=s.getBoundingClientRect().top+s.clientHeight/2,ps=[...document.querySelectorAll('.vpg')];let n=1;
+  ps.forEach((p,i)=>{if(p.getBoundingClientRect().top<=mid)n=i+1});const e2=$('#vpn');if(e2)e2.textContent=ps.length?n+' / '+ps.length:''}
+// --- ズーム ---
+function vApply(){const s=$('#vs'),p=$('#vp');if(!s)return;V.bw=Math.min(s.clientWidth,900);p.style.width=(V.bw*V.z)+'px'}
+function setZoom(z,cx,cy){z=Math.min(4,Math.max(1,z));const s=$('#vs'),p=$('#vp'),fx=(s.scrollLeft+cx)/p.offsetWidth,fy=(s.scrollTop+cy)/p.offsetHeight;
+  V.z=z;vApply();s.scrollLeft=fx*p.offsetWidth-cx;s.scrollTop=fy*p.offsetHeight-cy}
+// --- 道具 ---
+function setTool(t){V.tool=t;document.querySelectorAll('.vtools [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t));vOpt()}
+function vOpt(){const o=$('#vopt'),t=V.tool;if(!o)return;if(t!='pen'&&t!='mk'){o.innerHTML='';return}
+  const cols=t=='pen'?PCOL:MCOL,cur=t=='pen'?V.pc:V.mc,szs=t=='pen'?PSZ:MSZ,cw=t=='pen'?V.pw:V.mw;
+  o.innerHTML=cols.map(c=>`<button class="dotc ${c==cur?'on':''}" style="background:${c}" onclick="vCol('${c}')"></button>`).join('')+'<span class=vsp></span>'+szs.map((w,i)=>`<button class="sdt ${w==cw?'on':''}" onclick="vSz(${w})"><i style="width:${[5,9,14][i]}px;height:${[5,9,14][i]}px"></i></button>`).join('')}
+function vCol(c){if(V.tool=='pen')V.pc=c;else V.mc=c;vOpt()}
+function vSz(w){if(V.tool=='pen')V.pw=w;else V.mw=w;vOpt()}
+// --- 指・ペンの動き ---
+const pageAt=(x,y)=>{const el=document.elementFromPoint(x,y);return el&&el.closest?el.closest('.vpg'):null};
+const norm=(pg,x,y)=>{const r=pg.getBoundingClientRect();return[cl((x-r.left)/r.width),cl((y-r.top)/r.height)]};
+function vDown(ev){
+  const s=$('#vs');if(ev.pointerType=='mouse')PT.clear();
+  s.setPointerCapture(ev.pointerId);PT.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+  if(PT.size>=2){endStroke(true);const [a,b]=[...PT.values()];V.g={t:'pinch',d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:V.z,cx:(a.x+b.x)/2,cy:(a.y+b.y)/2};return}
+  const sk=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.stk');
+  if(sk){V.g={t:'stk',id:sk.dataset.id,x:ev.clientX,y:ev.clientY,moved:false};return}
+  const pg=pageAt(ev.clientX,ev.clientY),T=V.tool;
+  if(T=='hand'||!pg){V.g={t:'pan',x:ev.clientX,y:ev.clientY,sl:s.scrollLeft,st:s.scrollTop};return}
+  if(T=='pen'||T=='mk'){
+    const [x,y]=norm(pg,ev.clientX,ev.clientY),mk=T=='mk';
+    const st={p:+pg.dataset.p,k:mk?'m':'p',c:mk?V.mc:V.pc,w:mk?V.mw:V.pw,pts:[Math.round(x*1e4),Math.round(y*1e4)]};
+    V.g={t:'draw',pg,s:st};liveSeg(st,pg);
+  }else if(T=='er'){V.g={t:'er',pg,del:[]};eraseAt(ev)}
+  else if(T=='stk'){V.g={t:'add',pg,x:ev.clientX,y:ev.clientY}}
+}
+function vMove(ev){
+  if(!PT.has(ev.pointerId))return;PT.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});const g=V.g;if(!g)return;const s=$('#vs');
+  if(g.t=='pinch'){if(PT.size<2)return;const [a,b]=[...PT.values()],d=Math.hypot(a.x-b.x,a.y-b.y),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2,r=s.getBoundingClientRect();
+    setZoom(g.z*d/g.d,cx-r.left,cy-r.top);s.scrollLeft-=cx-g.cx;s.scrollTop-=cy-g.cy;g.cx=cx;g.cy=cy;return}
+  if(g.t=='pan'){s.scrollLeft=g.sl-(ev.clientX-g.x);s.scrollTop=g.st-(ev.clientY-g.y)}
+  else if(g.t=='draw'){const [x,y]=norm(g.pg,ev.clientX,ev.clientY),p=g.s.pts,asp=+g.pg.dataset.a;
+    if(Math.hypot(x-p[p.length-2]/1e4,(y-p[p.length-1]/1e4)*asp)<.0012)return;p.push(Math.round(x*1e4),Math.round(y*1e4));liveSeg(g.s,g.pg)}
+  else if(g.t=='er')eraseAt(ev);
+  else if(g.t=='stk'&&Math.hypot(ev.clientX-g.x,ev.clientY-g.y)>6){g.moved=true;moveStk(g.id,ev)}
+}
+function vUp(ev){
+  PT.delete(ev.pointerId);const g=V.g;if(!g)return;
+  if(g.t=='pinch'){if(PT.size<2)V.g=null;return}
+  if(g.t=='draw')endStroke(false);
+  else if(g.t=='er'){if(g.del.length){V.hist.push({del:g.del});vSave()}}
+  else if(g.t=='stk'){if(!g.moved)editStk(g.id);else vSave()}
+  else if(g.t=='add'){if(Math.hypot(ev.clientX-g.x,ev.clientY-g.y)<8)addStk(g.pg,ev)}
+  V.g=null;
+}
+function endStroke(cancel){const g=V.g;if(!g||g.t!='draw')return;V.g=null;
+  if(cancel){redraw(g.s.p);return}
+  V.strokes.push(g.s);V.hist.push({add:g.s});vSave()}
+// --- 描画 ---
+function liveSeg(s,pg){const c=pg.querySelector(s.k=='m'?'.mkl':'.penl'),W=c.width,H=c.height,x=c.getContext('2d'),n=s.pts.length;
+  x.strokeStyle=x.fillStyle=s.c;x.lineWidth=s.w*W;x.lineCap=x.lineJoin='round';x.beginPath();
+  if(n<4){x.arc(s.pts[0]/1e4*W,s.pts[1]/1e4*H,s.w*W/2,0,7);x.fill()}
+  else{x.moveTo(s.pts[n-4]/1e4*W,s.pts[n-3]/1e4*H);x.lineTo(s.pts[n-2]/1e4*W,s.pts[n-1]/1e4*H);x.stroke()}}
+function drawStroke(x,s){const W=x.canvas.width,H=x.canvas.height,p=s.pts;x.strokeStyle=x.fillStyle=s.c;x.lineWidth=s.w*W;x.lineCap=x.lineJoin='round';x.beginPath();
+  if(p.length<4){x.arc(p[0]/1e4*W,p[1]/1e4*H,s.w*W/2,0,7);x.fill()}
+  else{x.moveTo(p[0]/1e4*W,p[1]/1e4*H);for(let i=2;i<p.length;i+=2)x.lineTo(p[i]/1e4*W,p[i+1]/1e4*H);x.stroke()}}
+function redraw(p){const pg=document.querySelector(`.vpg[data-p="${p}"]`);if(!pg)return;
+  const m=pg.querySelector('.mkl'),n=pg.querySelector('.penl');m.getContext('2d').clearRect(0,0,m.width,m.height);n.getContext('2d').clearRect(0,0,n.width,n.height);
+  V.strokes.filter(s=>s.p==p).forEach(s=>drawStroke((s.k=='m'?m:n).getContext('2d'),s))}
+function eraseAt(ev){const g=V.g,[x,y]=norm(g.pg,ev.clientX,ev.clientY),pn=+g.pg.dataset.p,asp=+g.pg.dataset.a;
+  const hit=V.strokes.filter(s=>s.p==pn&&s.pts.some((v,i)=>i%2==0&&Math.hypot(v/1e4-x,(s.pts[i+1]/1e4-y)*asp)<.02+s.w/2));
+  if(hit.length){hit.forEach(s=>{V.strokes.splice(V.strokes.indexOf(s),1);g.del.push(s)});redraw(pn)}}
+function vUndo(){const h=V.hist.pop();if(!h)return toast('もとに戻せる操作がありません');
+  if(h.add){const i=V.strokes.indexOf(h.add);if(i>=0)V.strokes.splice(i,1);redraw(h.add.p)}
+  else{const l=h.del||h.clr;l.forEach(s=>V.strokes.push(s));new Set(l.map(s=>s.p)).forEach(redraw)}
+  vSave()}
+function vClear(){if(!V.strokes.length)return toast('消す書き込みがありません');
+  if(!confirm('ペンとマーカーの書き込みを、すべて消しますか?'))return;
+  const all=V.strokes.splice(0);V.hist.push({clr:all});new Set(all.map(s=>s.p)).forEach(redraw);vSave()}
+// --- 付箋 ---
+function drawStk(){document.querySelectorAll('.vpg').forEach(pg=>{pg.querySelector('.vstl').innerHTML=V.stk.filter(s=>s.p==+pg.dataset.p).map(s=>
+  `<div class=stk data-id="${s.id}" style="left:${s.x*100}%;top:${s.y*100}%;background:${s.c}">${s.t?e([...s.t].slice(0,8).join('')):IC(I.stk,16)}</div>`).join('')})}
+function addStk(pg,ev){const [x,y]=norm(pg,ev.clientX,ev.clientY),s={id:'s'+Date.now().toString(36),p:+pg.dataset.p,x,y,t:'',c:SCOL[0]};V.stk.push(s);drawStk();editStk(s.id,true)}
+function moveStk(id,ev){const s=V.stk.find(x=>x.id==id),pg=document.querySelector(`.vpg[data-p="${s.p}"]`),[x,y]=norm(pg,ev.clientX,ev.clientY);s.x=x;s.y=y;
+  const el=pg.querySelector(`.stk[data-id="${id}"]`);if(el){el.style.left=x*100+'%';el.style.top=y*100+'%'}}
+function editStk(id,isNew){
+  const s=V.stk.find(x=>x.id==id);if(!s)return;let col=s.c;
+  const m=document.createElement('div');m.className='vmodal';
+  m.innerHTML=`<div class=card><textarea id=stx rows=4 maxlength=300 placeholder="メモ">${e(s.t)}</textarea><div class=row3>${SCOL.map(c=>`<button class="dotc ${c==col?'on':''}" style="background:${c}" data-c="${c}"></button>`).join('')}<span class=vsp></span><button class="b r ib" id=sdel>${IC(I.trash,18)}</button><button class="b ib" id=sok>${IC(I.check,18)}</button></div></div>`;
+  $('#vw').append(m);const ta=m.querySelector('#stx');ta.focus();
+  m.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{col=b.dataset.c;m.querySelectorAll('[data-c]').forEach(x=>x.classList.toggle('on',x==b))});
+  m.querySelector('#sdel').onclick=()=>{V.stk=V.stk.filter(x=>x.id!=id);m.remove();drawStk();vSave()};
+  m.querySelector('#sok').onclick=()=>{s.t=ta.value;s.c=col;if(isNew&&!s.t.trim())V.stk=V.stk.filter(x=>x.id!=id);m.remove();drawStk();vSave()};
+}
+// --- 保存(自分だけ見られる。ファイルが新しい版になっても、そのまま引き継がれる) ---
+let _st=null;
+function vSave(){V.dirty=true;clearTimeout(_st);_st=setTimeout(vFlush,1200)}
+async function vFlush(){
+  if(!V.dirty||!V.it)return;V.dirty=false;
+  const it=V.it,data={pid:PID,itemId:it.id,strokes:V.strokes,stk:V.stk,ver:it.version,updatedAt:Date.now()};
+  if(JSON.stringify(data).length>900000)return toast('書き込みが多すぎて保存できません。一部を消してください');
+  try{await db.doc('notes/'+PID+'_'+it.id).set(data);await db.doc('nmeta/'+PID).set({m:{[it.id]:data.updatedAt}},{merge:true});NM[it.id]=data.updatedAt}
+  catch(x){V.dirty=true;toast('保存できませんでした')}
+}
+// --- ダウンロード・印刷(名前とシリアルコードの透かし入りPDFを作り、別タブで開く) ---
+function vDl(){
+  if(!V.strokes.length)return dl(false);
+  const m=document.createElement('div');m.className='vmodal';
+  m.innerHTML=`<div class=card style="text-align:center"><button class="b big" onclick="dl(true)">書き込みも入れる</button><button class="b g big" onclick="dl(false)">元のPDFのまま</button><button class="b g ib" onclick="this.closest('.vmodal').remove()">${IC(I.close,18)}</button></div>`;
+  $('#vw').append(m);
+}
+async function dl(ink){
+  document.querySelector('.vmodal')?.remove();
+  if(!PDFDOC)return;
   try{
     await loadLib('pdflib');
     const out=await PDFLib.PDFDocument.create(),txt=P.last+' '+P.first+'  /  '+P.serial,n=PDFDOC.numPages;
     for(let i=1;i<=n;i++){
-      bt.textContent=`作成中… ${i}/${n}`;
+      toast(`作成中… ${i}/${n}`,true);
       const pg=await PDFDOC.getPage(i),v1=pg.getViewport({scale:1}),vp=pg.getViewport({scale:2.2}),c=document.createElement('canvas');
       c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');
       await pg.render({canvasContext:x,viewport:vp,intent:'print'}).promise; // 他のタブを見ていても止まらない描画方法
+      if(ink){
+        const m=document.createElement('canvas');m.width=c.width;m.height=c.height;const mx=m.getContext('2d');
+        V.strokes.filter(s=>s.p==i&&s.k=='m').forEach(s=>drawStroke(mx,s));
+        x.save();x.globalAlpha=.5;x.globalCompositeOperation='multiply';x.drawImage(m,0,0);x.restore();
+        V.strokes.filter(s=>s.p==i&&s.k=='p').forEach(s=>drawStroke(x,s));
+      }
       x.font=Math.round(vp.width/55)+'px sans-serif';x.fillStyle='rgba(0,0,0,.5)';x.textAlign='center';x.fillText(txt,vp.width/2,vp.height*0.985);
       const img=await out.embedJpg(c.toDataURL('image/jpeg',.92));
-      out.addPage([v1.width,v1.height]).drawImage(img,{x:0,y:0,width:v1.width,height:v1.height});
+      out.addPage([v1.width,v1.height]).drawImage(img,{x:0,y:0,width:v1.width,height:v1.height}); // 元のPDFと同じサイズ・向き
     }
-    bt.textContent='仕上げ中…';
+    toast('仕上げ中…',true);
     const url=URL.createObjectURL(new Blob([await out.save()],{type:'application/pdf'}));
-    if(!window.open(url,'_blank'))msg.innerHTML=`<a class="b big" href="${url}" target="_blank" style="text-align:center;text-decoration:none">PDFを開く(別のタブ)</a><p class=s>ポップアップがブロックされたため、このボタンから開いてください。</p>`;
-  }catch(x){alert('作成できませんでした: '+(x.message||x))}
-  bt.textContent=lab;bt.disabled=false;
+    if(window.open(url,'_blank'))toast('別のタブで開きました');
+    else toast(`<a class="b" href="${url}" target="_blank" onclick="toast('開きました')" style="text-decoration:none;color:#fff">PDFを開く</a>`,true);
+  }catch(x){toast('作成できませんでした')}
 }
-// スクリーンショット対策(完全には防げません)
+// スクリーンショット・右クリック対策(完全には防げません)
 document.addEventListener('visibilitychange',()=>{document.body.style.filter=document.hidden?'blur(20px)':''});
 window.addEventListener('blur',()=>document.body.style.filter='blur(20px)');
 window.addEventListener('focus',()=>document.body.style.filter='');
 document.addEventListener('keyup',k=>{if(k.key=='PrintScreen'){navigator.clipboard?.writeText('');alert('スクリーンショットは禁止されています')}});
-
-// 右クリック・長押しで画像として保存されるのを防ぐ
-document.addEventListener('contextmenu',ev=>{if(ev.target.closest&&ev.target.closest('#pv,.lockbox'))ev.preventDefault()});
+document.addEventListener('contextmenu',ev=>{if(ev.target.closest&&ev.target.closest('#vw,.lockbox'))ev.preventDefault()});
 
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
 async function news(){
