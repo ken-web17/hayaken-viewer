@@ -40,8 +40,8 @@ dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::ba
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.0.0"></script>
-<script src="legal.js?v=3.0.0"></script>
+<script src="common.js?v=3.1.0"></script>
+<script src="legal.js?v=3.1.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -72,8 +72,8 @@ function genreSel(p,cur,same){
   const cust=cur&&!GENRES.includes(cur);
   return `<select name=${p}gn onchange="this.nextElementSibling.hidden=this.value!='__c'" style="margin-bottom:6px"><option value="">${same?'共通と同じ':'なし'}</option>${GENRES.map(g=>`<option ${cur==g?'selected':''}>${g}</option>`).join('')}<option value="__c" ${cust?'selected':''}>自分で入力</option></select><input name=${p}gc placeholder="ジャンル名を入力" value="${cust?e(cur):''}" ${cust?'':'hidden'}>`}
 const gv=(o,p)=>o[p+'gn']=='__c'?(o[p+'gc']||'').trim():(o[p+'gn']||'');
-const multiHtml=()=>`<label>PDFファイル(複数まとめて選べます・1つ700KBまで)</label><input type=file name=files multiple accept=application/pdf required onchange="mkRows(this)"><div id=rows></div>`;
-function mkRows(inp){$('#rows').innerHTML=[...inp.files].map((x,i)=>`<div class=card style="margin:6px 0"><input name="nm_${i}" value="${e(x.name.replace(/\.pdf$/i,''))}" required style="margin-bottom:2px"><div class=s>${(x.size/1024).toFixed(0)}KB${x.size>700*1024?' <b style=color:#b91c1c>(700KBを超えています)</b>':''}</div>
+const multiHtml=()=>`<label>PDFファイル(複数まとめて選べます・1つ7MBまで)</label><input type=file name=files multiple accept=application/pdf required onchange="mkRows(this)"><div id=rows></div>`;
+function mkRows(inp){$('#rows').innerHTML=[...inp.files].map((x,i)=>`<div class=card style="margin:6px 0"><input name="nm_${i}" value="${e(x.name.replace(/\.pdf$/i,''))}" required style="margin-bottom:2px"><div class=s>${(x.size/1024).toFixed(0)}KB${x.size>7*1024*1024?' <b style=color:#b91c1c>(7MBを超えています)</b>':''}</div>
   <details><summary class=s style="cursor:pointer">この1つだけ個別に設定</summary><label>有効期限</label><input type=date name="ex_${i}"><label>本文</label><textarea name="bd_${i}" rows=2></textarea><label>ジャンル</label>${genreSel('f'+i+'_','',true)}</details></div>`).join('')}
 function acc(f){
   const v=f.v||{to:['all'],pv:[]},t=v.to||['all'],p=v.pv||[];
@@ -92,9 +92,27 @@ function accRes(fd,d){
 }
 const lvTxt=x=>{const f=a=>a.includes('all')?'全員':a.length+'人',t=x.to||['all'],p=x.pv||[];return '見れる: '+f(t)+(x.type!='folder'&&p.length?' / プレビュー: '+f(p):'')};
 /* PDFの1ページ目を粗いモザイクにした画像を作る(プレビュー用。文字は読めません) */
+/* 大きいPDFは、約0.9MBずつに分けて保存する(Firestoreは1件1MBまでのため) */
+const CH=900000;
+async function putBlob(id,b64){
+  const old=await db.doc('blobs/'+id).get(),on=old.exists?(old.data().n||1):0,n=Math.max(1,Math.ceil(b64.length/CH));
+  for(let k=n-1;k>=1;k--)await db.doc('blobs/'+id+'_'+k).set({d:b64.slice(k*CH,(k+1)*CH)});
+  await db.doc('blobs/'+id).set({d:b64.slice(0,CH),n});
+  for(let k=n;k<on;k++)await db.doc('blobs/'+id+'_'+k).delete(); // 前の版が長かったときの残りを消す
+}
+async function delBlob(id){
+  const s=await db.doc('blobs/'+id).get();if(!s.exists)return;
+  for(let k=1;k<(s.data().n||1);k++)await db.doc('blobs/'+id+'_'+k).delete();
+  await db.doc('blobs/'+id).delete();
+}
+async function copyBlob(from,to){
+  const s=await db.doc('blobs/'+from).get();if(!s.exists)return;
+  for(let k=(s.data().n||1)-1;k>=1;k--){const c=await db.doc('blobs/'+from+'_'+k).get();if(c.exists)await db.doc('blobs/'+to+'_'+k).set(c.data())}
+  await db.doc('blobs/'+to).set(s.data());
+}
 async function mkPreview(id,b64){
   await loadLib('pdfjs');
-  const pdf=await pdfjsLib.getDocument({data:Uint8Array.from(atob(b64),c=>c.charCodeAt(0)),cMapUrl:PC,cMapPacked:true}).promise;
+  const pdf=await pdfjsLib.getDocument({data:b64ToU8(b64),cMapUrl:PC,cMapPacked:true}).promise;
   const pg=await pdf.getPage(1),v=pg.getViewport({scale:1}),vp=pg.getViewport({scale:420/v.width});
   const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
   await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
@@ -108,8 +126,8 @@ async function mkPreview(id,b64){
 async function genMissing(){ // プレビュー画像がない・古い形式のPDFを、裏で自動的に作り直す
   if(genMissing.on)return;genMissing.on=true;
   try{for(const x of items.filter(i=>i.type=='pdf'&&(!i.pvImg||i.pvStyle!='blur'))){
-    const s=await db.doc('blobs/'+x.id).get();if(!s.exists)continue;
-    await mkPreview(x.id,s.data().d);x.pvImg=true;x.pvStyle='blur'}}catch(x){}
+    const b64=await getBlob64(x.id).catch(()=>null);if(!b64)continue;
+    await mkPreview(x.id,b64);x.pvImg=true;x.pvStyle='blur'}}catch(x){}
   genMissing.on=false;
 }
 const rd=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
@@ -165,12 +183,12 @@ async function mkPdfs(){
   let ok=0;const skip=[];
   for(let i=0;i<fl.length;i++){
     const f=fl[i],nm=(o['nm_'+i]||'').trim()||f.name.replace(/\.pdf$/i,'');
-    if(f.size>700*1024){skip.push(nm+'(700KB超)');continue}
+    if(f.size>7*1024*1024){skip.push(nm+'(7MB超)');continue}
     if(items.some(x=>x.parent==cur&&x.name==nm&&x.type=='pdf')){skip.push(nm+'(同じ名前あり)');continue}
     $('#busy').innerHTML=`<p class=s>アップロード中… ${i+1}/${fl.length}</p>`;
     try{
       const ref=db.collection('items').doc(),b=db.batch(),b64=await rd(f);
-      b.set(db.doc('blobs/'+ref.id),{d:b64});
+      await putBlob(ref.id,b64);
       b.set(ref,{parent:cur,type:'pdf',name:nm,expiry:o['ex_'+i]||o.ex,body:o['bd_'+i]||o.bd,genre:gv(o,'f'+i+'_')||gv(o,''),to:o.to,pv:o.pv||[],version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()+i});
       await b.commit();items.push({id:ref.id,parent:cur,type:'pdf',name:nm});ok++;
       try{await mkPreview(ref.id,b64)}catch(x){}
@@ -182,7 +200,7 @@ async function mkPdfs(){
 async function mk(type){
   if(type=='pdf')return mkPdfs();
   const cur=path[path.length-1]||'',fs=[];
-  if(type=='pdf')fs.push({l:'PDFファイル(700KBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
+  if(type=='pdf')fs.push({l:'PDFファイル(7MBまで)',n:'file',t:'file',a:`accept=application/pdf required onchange="this.form.elements.nm.value=this.files[0].name.replace(/\\.pdf$/i,'')"`,v:''});
   fs.push({l:'名前',n:'nm',v:'',a:'required'});
   if(type=='folder')fs.push({t:'color',v:COLORS[0]},{l:'アイコンの文字(1文字・任意)',n:'mark',v:'',a:'maxlength=2'});
   fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'acc',v:{to:['all'],pv:[]},nopv:type=='folder'});
@@ -191,7 +209,7 @@ async function mk(type){
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
   const ref=db.collection('items').doc(),b=db.batch();
   let b64='';
-  if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>700*1024)return alert('700KBを超えています');b64=await rd(o.file);b.set(db.doc('blobs/'+ref.id),{d:b64})}
+  if(type=='pdf'){if(!o.file.size)return alert('PDFを選んでください');if(o.file.size>7*1024*1024)return alert('7MBを超えています');b64=await rd(o.file);b.set(db.doc('blobs/'+ref.id),{d:b64})}
   const d={parent:cur,type,name:o.nm,expiry:o.ex,body:o.bd,genre:gv(o,''),to:o.to,pv:o.pv||[],version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()};
   if(type=='folder'){d.color=o.color;d.mark=[...(o.mark||'')][0]||''}
   b.set(ref,d);await b.commit();
@@ -201,7 +219,7 @@ async function mk(type){
 const subtree=id=>items.filter(x=>x.parent==id).flatMap(x=>[x.id,...subtree(x.id)]);
 async function upd(id,ver){
   const it=items.find(x=>x.id==id),fs=[];
-  if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(700KBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
+  if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(7MBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
   fs.push({l:'名前',n:'nm',v:it.name,a:'required'});
   if(it.type=='folder')fs.push({t:'color',v:it.color},{l:'アイコンの文字(1文字・任意)',n:'mark',v:it.mark||'',a:'maxlength=2'});
   if(it.type!='folder')fs.push({t:'genre',v:it.genre||''});
@@ -212,7 +230,7 @@ async function upd(id,ver){
   let nb='';const b=db.batch(),u={name:o.nm,expiry:o.ex,body:o.bd,genre:gv(o,''),to:o.to,pv:o.pv||[]};
   if(it.type=='folder'){u.color=o.color;u.mark=[...(o.mark||'')][0]||''}
   if(ver){u.version=it.version+1;u.history=[...it.history,{v:u.version,at:Date.now(),note:o.note}];
-    if(it.type=='pdf'){if(o.file.size>700*1024)return alert('700KBを超えています');nb=await rd(o.file);b.set(db.doc('blobs/'+id),{d:nb})}}
+    if(it.type=='pdf'){if(o.file.size>7*1024*1024)return alert('7MBを超えています');nb=await rd(o.file);await putBlob(id,nb)}}
   b.update(db.doc('items/'+id),u);
   if(o.apply)subtree(id).forEach(c=>b.update(db.doc('items/'+c),{to:o.to,pv:[]}));
   await b.commit();
@@ -223,7 +241,7 @@ async function copyTree(id,dest,nm){
   const it=items.find(x=>x.id==id),ref=db.collection('items').doc(),d={...it};delete d.id;delete d.order;
   Object.assign(d,{parent:dest,name:nm??it.name,version:1,history:[{v:1,at:Date.now(),note:'コピー'}],createdAt:Date.now()});
   const b=db.batch();
-  if(it.type=='pdf'){const s=await db.doc('blobs/'+id).get();if(s.exists)b.set(db.doc('blobs/'+ref.id),s.data());const ps=await db.doc('previews/'+id).get();if(ps.exists)b.set(db.doc('previews/'+ref.id),ps.data());d.pvImg=ps.exists}
+  if(it.type=='pdf'){await copyBlob(id,ref.id);const ps=await db.doc('previews/'+id).get();if(ps.exists)b.set(db.doc('previews/'+ref.id),ps.data());d.pvImg=ps.exists}
   b.set(ref,d);
   await b.commit();
   if(it.type=='folder')for(const c of items.filter(x=>x.parent==id))await copyTree(c.id,ref.id);
@@ -246,7 +264,7 @@ async function del(id){
   const it=items.find(x=>x.id==id);
   if(items.some(x=>x.parent==id))return alert('中身が残っています。先に中身を削除してください。');
   if(!confirm(`「${it.name}」を削除しますか?`))return;
-  await db.doc('items/'+id).delete();if(it.type=='pdf'){await db.doc('blobs/'+id).delete();await db.doc('previews/'+id).delete()}shelf();
+  await db.doc('items/'+id).delete();if(it.type=='pdf'){await delBlob(id);await db.doc('previews/'+id).delete()}shelf();
 }
 async function vw(id){
   const it=items.find(x=>x.id==id),d=document.createElement('dialog');d.style.width='min(900px,96vw)';
