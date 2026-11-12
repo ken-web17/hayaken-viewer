@@ -40,8 +40,8 @@ dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::ba
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.1.0"></script>
-<script src="legal.js?v=3.1.0"></script>
+<script src="common.js?v=3.2.0"></script>
+<script src="legal.js?v=3.2.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -67,7 +67,7 @@ function ask(t,fs){return new Promise(r=>{const d=document.createElement('dialog
   document.body.append(d);d.showModal();
   d.onclose=()=>{const o={};if(d.returnValue=='ok'){const fd=new FormData(d.querySelector('form'));fd.forEach((v,k)=>o[k]=v);Object.assign(o,accRes(fd,d));o.filesAll=fd.getAll('files')}r(d.returnValue=='ok'?o:null);d.remove()}})}
 /* ジャンル(公式教材・対策プリント・ワークシート・その他・自分で入力) */
-const GENRES=['公式教材','対策プリント','ワークシート','その他'];
+const GENRES=['公式教材','対策プリント','ワークシート','授業プリント','その他'];
 function genreSel(p,cur,same){
   const cust=cur&&!GENRES.includes(cur);
   return `<select name=${p}gn onchange="this.nextElementSibling.hidden=this.value!='__c'" style="margin-bottom:6px"><option value="">${same?'共通と同じ':'なし'}</option>${GENRES.map(g=>`<option ${cur==g?'selected':''}>${g}</option>`).join('')}<option value="__c" ${cust?'selected':''}>自分で入力</option></select><input name=${p}gc placeholder="ジャンル名を入力" value="${cust?e(cur):''}" ${cust?'':'hidden'}>`}
@@ -204,7 +204,7 @@ async function mk(type){
   fs.push({l:'名前',n:'nm',v:'',a:'required'});
   if(type=='folder')fs.push({t:'color',v:COLORS[0]},{l:'アイコンの文字(1文字・任意)',n:'mark',v:'',a:'maxlength=2'});
   fs.push({l:'有効期限(空欄で無期限)',n:'ex',t:'date',v:''},{l:type=='folder'?'本文(フォルダ名の下に表示)':type=='pdf'?'本文(PDFの下に表示)':'本文(テキストの内容)',n:'bd',t:'area',v:''},{t:'acc',v:{to:['all'],pv:[]},nopv:type=='folder'});
-  if(type=='text')fs.splice(fs.length-1,0,{t:'genre',v:''});
+  if(type!='pdf')fs.splice(fs.length-1,0,{t:'genre',v:''}); // フォルダにもジャンルを付けられる
   const o=await ask({folder:'フォルダを作る',pdf:'PDFをアップロード',text:'テキストを作る'}[type],fs);if(!o)return;
   if(items.some(x=>x.parent==cur&&x.name==o.nm&&x.type==type))return alert('同じ名前があります。名前を変更してやり直してください。');
   const ref=db.collection('items').doc(),b=db.batch();
@@ -222,7 +222,7 @@ async function upd(id,ver){
   if(ver&&it.type=='pdf')fs.push({l:'新しいPDF(7MBまで)',n:'file',t:'file',a:'accept=application/pdf required',v:''});
   fs.push({l:'名前',n:'nm',v:it.name,a:'required'});
   if(it.type=='folder')fs.push({t:'color',v:it.color},{l:'アイコンの文字(1文字・任意)',n:'mark',v:it.mark||'',a:'maxlength=2'});
-  if(it.type!='folder')fs.push({t:'genre',v:it.genre||''});
+  fs.push({t:'genre',v:it.genre||''});
   fs.push({l:'有効期限',n:'ex',t:'date',v:it.expiry},{l:'本文',n:'bd',t:'area',v:it.body},{t:'acc',v:{to:it.to||['all'],pv:it.pv||[]},nopv:it.type=='folder'});
   if(it.type=='folder')fs.push({t:'chk',n:'apply',l:'この公開範囲を、フォルダの中身すべてにも適用する'});
   if(ver)fs.push({l:'更新メモ(履歴に残ります)',n:'note',v:''});

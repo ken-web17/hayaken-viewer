@@ -1,5 +1,5 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='3.1.0',APP_DATE='2026-11-10';
+const APP_VERSION='3.2.0',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
@@ -52,10 +52,12 @@ async function getBlob64(id){
 }
 const b64ToU8=b=>{const s=atob(b),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u};
 // PDFを読み込む(画面には出さない)。ビューア「ひらく」用
-async function getPdf(id){
+let PDFID=null;
+async function getPdf(id,key){ // key を渡すと、同じものを何度も読み込まずに使い回す
+  if(key&&PDFDOC&&PDFID===key)return PDFDOC;
   await loadLib('pdfjs');
-  PDFDOC=await pdfjsLib.getDocument({data:b64ToU8(await getBlob64(id)),cMapUrl:PC,cMapPacked:true}).promise;
-  return PDFDOC;
+  const d=await pdfjsLib.getDocument({data:b64ToU8(await getBlob64(id)),cMapUrl:PC,cMapPacked:true}).promise;
+  PDFDOC=d;PDFID=key||null;return d;
 }
 async function renderPdf(id,box,wm){
   await getPdf(id);
