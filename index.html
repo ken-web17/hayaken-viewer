@@ -118,14 +118,17 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .step{display:flex;gap:14px;align-items:center;text-align:left;margin:14px 0;font-size:15px;line-height:1.5}
 .step .ico{flex:none;width:52px;height:52px;border-radius:14px;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center}
 .step .n{font-weight:800;color:#1d4ed8;margin-right:4px}
+.okmsg{background:#dcfce7;color:#166534;border-radius:12px;padding:10px 14px;font-weight:700;margin:4px 0 8px;text-align:center}
+.note{background:#fef3c7;color:#78350f;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.6;margin:12px 0}
+#gurl{font-size:13px;margin:6px 0 4px}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.2.0"></script>
-<script src="legal.js?v=3.2.0"></script>
+<script src="common.js?v=3.3.0"></script>
+<script src="legal.js?v=3.3.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -144,7 +147,7 @@ const err=(m,ok)=>{const x=$('#er');if(x){x.textContent=m;x.style.color=ok?'#166
 loadLegal();
 
 /* ---------- ログイン・新規登録 ---------- */
-function loginView(m=''){show(`<div class=auth><div class=box>${brandHtml('#1d4ed8')}<p class=kana>ぶりぶりー</p><p class=sub>ログインしてください</p>
+function loginView(m=''){if(GATE())return gateScreen();show(`<div class=auth><div class=box>${brandHtml('#1d4ed8')}<p class=kana>ぶりぶりー</p><p class=sub>ログインしてください</p>
 <label>ログインID(学籍番号)</label><input id=li autocomplete=username>
 <label>パスワード</label><input id=lp type=password autocomplete=current-password onkeydown="if(event.key=='Enter')doLogin()">
 <p id=er class=err>${e(m)}</p><button class="b big" onclick=doLogin()>ログイン</button>
@@ -200,11 +203,11 @@ async function doReset(){
     b.set(db.collection('inbox').doc(),{type:'reset_done',uid:pid,sid:sk,at:Date.now()});
     await b.commit();
   }catch(x){await c.user.delete();busy=false;return err('再設定できませんでした。もう一度お試しください')}
-  busy=false;boot(c.user);
+  busy=false;if(GATE())GATEMSG='パスワードを再設定しました。';boot(c.user);
 }
 
 /* ---------- 新規登録 ---------- */
-function regView(){LR={};show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>
+function regView(){LR={};show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>${GATE()?'<p class=s style="margin:-6px 0 10px">登録したあとは、ホーム画面に追加して使います。</p>':''}
 <div class=two><div><label>姓</label><input id=ln></div><div><label>名</label><input id=fn></div></div>
 <label>学籍番号(ログインIDになります)</label><input id=sid>
 <label>パスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
@@ -246,6 +249,7 @@ async function doReg(){
 }
 auth.onAuthStateChanged(u=>{if(busy)return;u?boot(u):loginView()});
 async function boot(u){
+  if(GATE()&&!FIRST){await auth.signOut();return}
   let pid=u.uid;HM=false;
   try{const m=await db.doc('authmap/'+u.uid).get();if(m.exists){pid=m.data().pid;HM=true}}catch(x){}
   let s=null;try{s=await db.doc('users/'+pid).get()}catch(x){}
@@ -281,7 +285,7 @@ const I={close:'M6 6l12 12M18 6L6 18',back:'M15 5l-7 7 7 7',check:'M5 12l5 5 9-1
  fs:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',fsx:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',dl:'M12 4v11M7 11l5 5 5-5M5 20h14',
  sync:'M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4',list:'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
  search:'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',sliders:'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4',open:'M5 12h14M13 6l6 6-6 6'};
-Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8'});
+Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8',copy:'M9 9h11v11H9zM5 15H4V4h11v1'});
 let _tt=null;
 function toast(h,sticky){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.append(t)}t.innerHTML=h;t.hidden=false;clearTimeout(_tt);if(!sticky)_tt=setTimeout(()=>t.hidden=true,2200)}
 
@@ -650,7 +654,7 @@ function showTutorial(){
     d.innerHTML=`<div style="text-align:center"><div class=tuti>${IC(s.i,44,1.8)}</div><h3 style="margin:0 0 6px">${s.t}</h3><p class=tutd>${s.d}</p><div class=dots>${TUT.map((_,i)=>`<i class="${i==k?'on':''}"></i>`).join('')}</div><button class="b big" id=tn>${last?'はじめる':'つぎへ'}</button>${last?'':'<button class="b g big" id=ts>スキップ</button>'}</div>`;
     d.querySelector('#tn').onclick=()=>{if(last)d.close();else{k++;draw()}};
     const sk=d.querySelector('#ts');if(sk)sk.onclick=()=>d.close()};
-  d.onclose=()=>{d.remove();FIRST=false;showA2HS()};
+  d.onclose=()=>{d.remove();FIRST=false;if(GATE()){GATEMSG='登録できました!';auth.signOut()}};
   draw();document.body.append(d);d.showModal();
 }
 // iPhone・iPadで、まだホーム画面に追加していない人へ(1回だけ表示)
@@ -667,6 +671,38 @@ function showA2HS(){
    <div class=step><span class=ico style="font-weight:800;font-size:15px">追加</span><div><span class=n>3</span>右上の<b>「追加」</b>を押す</div></div>
    <button class="b big" onclick="this.closest('dialog').close()">わかった</button></div>`;
   d.onclose=()=>d.remove();document.body.append(d);d.showModal();
+}
+
+/* ---------- iPhone・iPad: ホーム画面に追加したアプリから使う(新規登録だけブラウザでできる) ---------- */
+let GATEMSG='';
+const GATE=()=>isIOS()&&!isStandalone();
+// いま開いているのが、Safari以外のアプリ・ブラウザなら、その名前(Safariなら空)
+function uaApp(){const u=navigator.userAgent;
+  if(/Line\//i.test(u))return 'LINE';if(/Instagram/i.test(u))return 'Instagram';if(/FBAN|FBAV/i.test(u))return 'Facebook';if(/Twitter/i.test(u))return 'X(Twitter)';
+  if(/CriOS|GSA\//i.test(u))return 'Google(Chrome)';if(/FxiOS/i.test(u))return 'Firefox';if(/EdgiOS/i.test(u))return 'Edge';if(/MicroMessenger/i.test(u))return 'WeChat';
+  if(/DuckDuckGo|OPiOS/i.test(u))return 'このブラウザ';
+  return /Safari/i.test(u)?'':'このアプリ内ブラウザ'}
+function copyUrl(){
+  const u=location.origin+location.pathname,done=()=>{const b=$('#cpb');if(b)b.textContent='コピーしました'};
+  const fb=()=>{const i=$('#gurl');if(i){i.select();i.setSelectionRange(0,999);try{document.execCommand('copy');done()}catch(x){}}};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(u).then(done).catch(fb);else fb();
+}
+function gateScreen(){
+  const app=uaApp(),msg=GATEMSG,url=location.origin+location.pathname;GATEMSG='';
+  const safari=`<div class=step><span class=ico>${IC(I.share,28)}</span><div><span class=n>1</span>Safariの<b>「共有」ボタン</b>(□に↑)を押す<br><span class=s>見当たらないときは、画面の「…」または「≡」(三本線)のメニューから「共有」を選びます</span></div></div>
+   <div class=step><span class=ico>${IC(I.addhome,28)}</span><div><span class=n>2</span>メニューを下にずらして<b>「ホーム画面に追加」</b>を押す</div></div>
+   <div class=step><span class=ico style="font-weight:800;font-size:15px">追加</span><div><span class=n>3</span>右上の<b>「追加」</b>を押す</div></div>`;
+  const other=`<div class=step><span class=ico>${IC(I.copy,28)}</span><div><span class=n>1</span>下の<b>「URLをコピー」</b>を押す</div></div>
+   <div class=step><span class=ico style="font-weight:800;font-size:12px">Safari</span><div><span class=n>2</span><b>Safari</b>を開いて、アドレス欄に<b>はりつけて</b>開く</div></div>
+   <div class=step><span class=ico>${IC(I.share,28)}</span><div><span class=n>3</span>Safariの<b>「共有」ボタン</b>(または「…」「≡」)→<b>「ホーム画面に追加」</b>→<b>「追加」</b></div></div>
+   <input id=gurl readonly value="${e(url)}" onclick="this.select()"><button id=cpb class="b big" onclick=copyUrl()>URLをコピー</button>`;
+  show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}
+   ${msg?`<p class=okmsg>${e(msg)}</p>`:''}
+   <h3 style="margin:6px 0 4px">ホーム画面に追加して使います</h3>
+   <p class=s style="margin:0 0 4px">iPhone・iPadでは、ホーム画面に追加した「Bribly」のアイコンから使います。${app?`いま開いている「${e(app)}」では追加できないため、Safariで開き直してください。`:''}</p>
+   ${app?other:safari}
+   <div class=note>ホーム画面のアプリを開いたら、<b>もう一度ログイン</b>してください(ブラウザとは保存場所が別のためです)。</div>
+   ${msg?'':'<div class=or>はじめての方</div><button class="b g big" onclick=regView()>新規登録(ここからできます)</button>'}</div></div>`);
 }
 
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
