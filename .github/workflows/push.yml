@@ -1,0 +1,22 @@
+name: send-push
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+concurrency:
+  group: send-push
+  cancel-in-progress: false
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --prefix push --no-audit --no-fund
+      - run: node push/send.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
