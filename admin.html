@@ -40,8 +40,8 @@ dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::ba
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.3.0"></script>
-<script src="legal.js?v=3.3.0"></script>
+<script src="common.js?v=3.4.0"></script>
+<script src="legal.js?v=3.4.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -290,7 +290,7 @@ async function news(pre){
   if(sub=='hist'){
     const l=(await col('notices')).sort((a,b)=>b.createdAt-a.createdAt);window._n=l;
     $('#m').innerHTML=subBar()+(l.map((n,i)=>`<div class=card><span class=chip style="background:${G[n.genre]}">${e(n.genre)}</span><b>${e(n.subject)}</b>
-     <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')} / ${n.to.includes('all')||n.future?'今後の登録者にも表示':'今後の登録者には非表示'}</div>
+     <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')} / ${n.to.includes('all')||n.future?'今後の登録者にも表示':'今後の登録者には非表示'}${pushLabel(n)}</div>
      <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
@@ -344,7 +344,7 @@ async function apv(i,ok){
   await b.commit();news();
 }
 function compose(p={}){
-  const to=p.to||[],all=to.includes('all'),fut=p.to?(all||!!p.future):true;
+  const to=p.to||[],all=to.includes('all'),fut=p.to?(all||!!p.future):true,psh=p.id?(p.push===true&&p.pushed===false):true;
   $('#m').innerHTML=subBar()+`<div class=card id=cmp data-rt="${e(p.replyTo||'')}"><h3>${p.id?'お知らせを編集':'お知らせを送付'}</h3>
   <label>件名</label><input id=sj value="${e(p.subject)}">
   <label>ジャンル</label><select id=gn>${Object.keys(G).map(g=>`<option ${p.genre==g?'selected':''}>${g}</option>`).join('')}</select>
@@ -352,6 +352,7 @@ function compose(p={}){
   <label>送り先</label><div class=row><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=true)">すべて選択</button><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=false)">選択解除</button></div>
   <div class=who>${users.map(u=>`<label class=rl><input type=checkbox class=rc value="${u.id}" ${all||to.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}</div>
   <label class=rl><input type=checkbox id=fut ${fut?'checked':''}>これより後に登録した人にも表示する</label><p class=s>オフにすると、いま登録している人だけに表示されます。</p>
+  <label class=rl><input type=checkbox id=psh ${psh?'checked':''}>スマホに通知も送る</label><p class=s>通知をオンにしている人のスマホに、ポップアップが届きます(数分かかることがあります)。</p>
   <button class="b big" onclick="sendN('${p.id||''}')">${p.id?'更新する':'送付する'}</button></div>`;
 }
 async function sendN(id){
@@ -359,9 +360,65 @@ async function sendN(id){
   if(!$v('#sj').trim()||!$v('#bd').trim()||!ch.length)return alert('件名・本文・送り先を入力してください');
   const fut=$('#fut').checked,allSel=ch.length==users.length;
   const d={subject:$v('#sj'),genre:$v('#gn'),body:$v('#bd'),to:allSel&&fut?['all']:ch,future:fut&&!allSel};
+  const psh=$('#psh').checked;d.push=psh;if(psh)d.pushed=false;else if(id)d.pushed=true; // 通知を送る/送らない
   id?await db.doc('notices/'+id).update(d):await db.collection('notices').add({...d,createdAt:Date.now()});
   const rt=$('#cmp')?.dataset.rt;if(rt)await db.doc('inbox/'+rt).update({handled:true,handledAt:Date.now()}); // 返信したら赤い表示を消す
-  alert('送付しました');sub='hist';news();
+  if(psh)await pushKick().catch(()=>{});
+  alert('送付しました'+(psh?'\n通知は、数分以内にスマホへ届きます。':''));sub='hist';news();
+}
+
+/* ---------- スマホへの通知(鍵・設定・送信) ---------- */
+const pushLabel=n=>n.push?(n.pushed===false?' / 通知: 送信待ち':` / 通知: 送信ずみ${n.pushSent!=null?'('+n.pushSent+'件)':''}`):'';
+async function pushCard(){
+  const box=$('#pushcard');if(!box)return;
+  let cfg={},n=0;
+  try{const s=await db.doc('settings/push').get();cfg=s.exists?s.data():{}}catch(x){}
+  try{n=(await col('pushsubs')).filter(x=>Object.keys(x.subs||{}).length).length}catch(x){}
+  const tk=localStorage.getItem('bribly_gh')?'設定ずみ':'未設定';
+  box.innerHTML=`<p>通知の鍵: <b>${cfg.vapid?'作成ずみ':'まだ作っていません'}</b> / 通知をオンにしている人: <b>${n}人</b></p>
+   <div class=row><button class=b onclick=makeVapid()>${cfg.vapid?'鍵を作り直す':'鍵を作る'}</button><button class="b g" onclick=pushHelp()>設定のしかた</button></div>
+   <label style="margin-top:12px">すぐ送るためのGitHubトークン(任意・${tk})</label>
+   <input id=ghk type=password placeholder="空のままでも、数分おきに自動で送られます">
+   <div class=row><button class="b g" onclick=saveGh()>保存</button><button class="b g" onclick="pushKick(true)">いま送信を実行</button></div>`;
+}
+function saveGh(){const v=$v('#ghk').trim();if(v)localStorage.setItem('bribly_gh',v);else localStorage.removeItem('bribly_gh');pushCard();alert('保存しました')}
+// 通知の鍵を、この画面(ブラウザ)の中で作る。公開用はFirebaseに保存、秘密用は1回だけ表示する
+async function makeVapid(){
+  if(!confirm('通知の鍵を作ります。\n(すでにある場合は作り直しになり、みんなの通知の登録がやり直しになります)'))return;
+  const kp=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+  const b=u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const pub=b(new Uint8Array(await crypto.subtle.exportKey('raw',kp.publicKey))),priv=(await crypto.subtle.exportKey('jwk',kp.privateKey)).d;
+  await db.doc('settings/push').set({vapid:pub,updatedAt:Date.now()});
+  const d=document.createElement('dialog');
+  d.innerHTML=`<h3>秘密の鍵ができました</h3><p class=s>下の文字を<b>コピー</b>して、GitHubの「Secrets」に <b>VAPID_PRIVATE_KEY</b> という名前で保存してください。<b>この画面を閉じると、二度と表示されません。</b>他の人には見せないでください。</p>
+   <input id=pk readonly value="${priv}" onclick="this.select()"><button class="b big" id=pkc>コピーする</button><button class="b g big" onclick="this.closest('dialog').remove();pushCard()">閉じる</button>`;
+  document.body.append(d);d.showModal();
+  d.querySelector('#pkc').onclick=async()=>{try{await navigator.clipboard.writeText(priv)}catch(x){$('#pk').select();document.execCommand('copy')}d.querySelector('#pkc').textContent='コピーしました'};
+}
+function pushHelp(){
+  const d=document.createElement('dialog');
+  d.innerHTML=`<h3>通知のしくみと設定のしかた</h3><div style="font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">
+   <p>お知らせの「スマホに通知も送る」をオンにして送ると、GitHub上の送信用プログラムが、数分おきに確認して、利用者のスマホに通知を送ります。最初に、次の設定を1回だけします。</p>
+   <ol><li>この画面の「鍵を作る」を押し、表示された<b>秘密の鍵</b>をコピーします。</li>
+   <li>GitHubのリポジトリ →「Settings」→「Secrets and variables」→「Actions」→「New repository secret」を押します。名前に <b>VAPID_PRIVATE_KEY</b>、中身に、コピーした鍵を貼って保存します。</li>
+   <li>Firebaseの「プロジェクトの設定」→「サービス アカウント」→「新しい秘密鍵を生成」で、ファイルをダウンロードします。そのファイルを<b>メモ帳で開いて、中身を全部コピー</b>し、GitHubのSecretに、名前 <b>FIREBASE_SERVICE_ACCOUNT</b> で貼って保存します。</li>
+   <li>GitHubのリポジトリに、<b>push</b>フォルダ(中の2ファイル)と、<b>sw.js</b>を上書きアップロードします。さらに「Add file → Create new file」で、名前を <b>.github/workflows/push.yml</b> にして、<b>push-workflow.yml</b>の中身を貼り、保存します。</li>
+   <li>GitHubの「Actions」タブを開き、有効にします。</li></ol>
+   <p><b>すぐに送りたいとき(任意):</b> GitHubの「Settings → Developer settings → Fine-grained tokens」で、このリポジトリだけ・「Actions」を「Read and write」にしたトークンを作り、上の欄に貼って保存します。そうすると、お知らせを送った直後に、送信が始まります。</p>
+   <p class=s>利用者は、マイページの「通知の設定」、または、ホーム画面のアプリを初めて開いたときの画面から、通知をオンにします。</p></div>
+   <p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  document.body.append(d);d.showModal();
+}
+// GitHubの送信プログラムを、いますぐ動かす(トークンを入れたときだけ)
+async function pushKick(show){
+  const tk=localStorage.getItem('bribly_gh');
+  if(!tk){if(show)alert('トークンが未設定です。数分以内に、自動で送られます。');return false}
+  const owner=location.hostname.split('.')[0],repo=location.pathname.split('/').filter(Boolean)[0]||'';
+  try{
+    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/push.yml/dispatches`,{method:'POST',headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json'},body:JSON.stringify({ref:'main'})});
+    if(show)alert(r.status==204?'送信を始めました。':'始められませんでした(トークンの権限や、リポジトリ名を確認してください)');
+    return r.status==204;
+  }catch(x){if(show)alert('始められませんでした');return false}
 }
 
 /* ---------- 設定 ---------- */
@@ -370,8 +427,9 @@ async function set(){
   $('#m').innerHTML=`<h2>登録ユーザー</h2><input id=q placeholder="名前・学籍番号で検索" oninput=ul()><div id=ul></div>
   <h2>シリアルコード</h2><button class=b onclick=gen()>新しいコードを発行</button><div class=card>${sr.sort((a,b)=>b.createdAt-a.createdAt).map(s=>{const u=users.find(x=>x.id==s.usedBy);return `<div class=s>${s.id} / ${s.usedBy?'使用済み: '+e(u?u.last+' '+u.first:'(退会済)'):'未使用'}</div>`}).join('')||'<span class=s>まだありません</span>'}</div>
   <h2>利用規約・プライバシーポリシー</h2><div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約を見る</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシーを見る</button><button class=b onclick=editLegal()>2つを編集する</button></div>
+  <h2>スマホへの通知</h2><div class=card id=pushcard><p class=s>読み込み中…</p></div>
   <h2>アプリ情報</h2>${verHtml()}`;
-  ul();
+  ul();pushCard();
 }
 async function editLegal(){
   const o=await ask('利用規約・プライバシーポリシーを編集',[{l:'利用規約',n:'t',t:'area',r:12,v:TERMS},{l:'プライバシーポリシー',n:'p',t:'area',r:12,v:PRIV}]);if(!o)return;

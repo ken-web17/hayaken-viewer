@@ -121,14 +121,21 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .okmsg{background:#dcfce7;color:#166534;border-radius:12px;padding:10px 14px;font-weight:700;margin:4px 0 8px;text-align:center}
 .note{background:#fef3c7;color:#78350f;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.6;margin:12px 0}
 #gurl{font-size:13px;margin:6px 0 4px}
+.nrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:15px;font-weight:400;color:#0f172a}
+.nrow small{display:block;color:#64748b;font-size:12px;margin-top:2px}
+.sw{position:relative;flex:none;width:50px;height:30px}
+.sw input{opacity:0;position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;z-index:1}
+.sw i{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.2s}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px #0004}
+.sw input:checked+i{background:#16a34a}.sw input:checked+i::after{left:23px}.sw input:disabled+i{opacity:.55}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.3.0"></script>
-<script src="legal.js?v=3.3.0"></script>
+<script src="common.js?v=3.4.0"></script>
+<script src="legal.js?v=3.4.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -260,7 +267,8 @@ function render(){
   show(`<header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
   ({shelf,news,me})[tab]();
   checkNews();
-  if(tab=='shelf'&&!FIRST)showImportant();
+  if(tab=='shelf'&&!FIRST&&!needFirstRun())showImportant();
+  maybeFirstRun();refreshSub();
 }
 
 /* ---------- 重要なお知らせ(本棚を開くたびに表示。「今後表示しない」で非表示) ---------- */
@@ -285,7 +293,7 @@ const I={close:'M6 6l12 12M18 6L6 18',back:'M15 5l-7 7 7 7',check:'M5 12l5 5 9-1
  fs:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',fsx:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',dl:'M12 4v11M7 11l5 5 5-5M5 20h14',
  sync:'M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4',list:'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
  search:'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',sliders:'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4',open:'M5 12h14M13 6l6 6-6 6'};
-Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8',copy:'M9 9h11v11H9zM5 15H4V4h11v1'});
+Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8',copy:'M9 9h11v11H9zM5 15H4V4h11v1',bell:'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0'});
 let _tt=null;
 function toast(h,sticky){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.append(t)}t.innerHTML=h;t.hidden=false;clearTimeout(_tt);if(!sticky)_tt=setTimeout(()=>t.hidden=true,2200)}
 
@@ -305,7 +313,7 @@ const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&v
 const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 let NM={},SEEN; // SEEN: お知らせを最後に見た日時 // ペン・付箋を最後に書いた日時(自分用)
 async function loadItems(){items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}))}
-async function loadMeta(){try{const s=await db.doc('nmeta/'+PID).get();NM=s.exists?(s.data().m||{}):{};SEEN=s.exists&&s.data().seenNews!=null?s.data().seenNews:null}catch(x){NM={};SEEN=null}}
+async function loadMeta(){try{const s=await db.doc('nmeta/'+PID).get();NM=s.exists?(s.data().m||{}):{};SEEN=s.exists&&s.data().seenNews!=null?s.data().seenNews:null;TUTSEEN=s.exists&&!!s.data().tut}catch(x){NM={};SEEN=null}}
 async function checkNews(){
   try{
     if(SEEN===undefined)await loadMeta();
@@ -648,13 +656,15 @@ const TUT=[
  {i:I.open,t:'ひらく',d:'ファイルの画面で「ひらく」を押すと、画面いっぱいで見られます。2本指で拡大・縮小できます。ダウンロード・印刷もここからです。'},
  {i:I.pen,t:'書き込み',d:'ひらいた画面の右下の「書き込み」で、ペン・マーカー・消しゴム・付箋が使えます。書き込みは自分だけに保存され、ファイルが新しくなっても残ります。'},
  {i:I.sync,t:'お知らせと同期',d:'新しいお知らせは、「お知らせ」の赤い点でわかります。右上の同期ボタンで、最新の状態に更新できます。'}];
-function showTutorial(){
+let TUTSEEN=false;
+const markTut=()=>{TUTSEEN=true;return PID?db.doc('nmeta/'+PID).set({tut:true},{merge:true}).catch(()=>{}):Promise.resolve()};
+function showTutorial(next){
   let k=0;const d=document.createElement('dialog');
   const draw=()=>{const s=TUT[k],last=k==TUT.length-1;
     d.innerHTML=`<div style="text-align:center"><div class=tuti>${IC(s.i,44,1.8)}</div><h3 style="margin:0 0 6px">${s.t}</h3><p class=tutd>${s.d}</p><div class=dots>${TUT.map((_,i)=>`<i class="${i==k?'on':''}"></i>`).join('')}</div><button class="b big" id=tn>${last?'はじめる':'つぎへ'}</button>${last?'':'<button class="b g big" id=ts>スキップ</button>'}</div>`;
     d.querySelector('#tn').onclick=()=>{if(last)d.close();else{k++;draw()}};
     const sk=d.querySelector('#ts');if(sk)sk.onclick=()=>d.close()};
-  d.onclose=()=>{d.remove();FIRST=false;if(GATE()){GATEMSG='登録できました!';auth.signOut()}};
+  d.onclose=async()=>{d.remove();FIRST=false;await markTut();if(next)return next();if(GATE()){GATEMSG='登録できました!';auth.signOut()}};
   draw();document.body.append(d);d.showModal();
 }
 // iPhone・iPadで、まだホーム画面に追加していない人へ(1回だけ表示)
@@ -705,6 +715,82 @@ function gateScreen(){
    ${msg?'':'<div class=or>はじめての方</div><button class="b g big" onclick=regView()>新規登録(ここからできます)</button>'}</div></div>`);
 }
 
+/* ---------- 通知(スマホのポップアップ)の設定と登録 ---------- */
+const IMPG='重要なお知らせ';
+const NG=[['教材について(追加)','新しい教材が追加されたとき'],['教材について(更新)','教材が新しくなったとき'],['お知らせ','ふつうのお知らせ'],[IMPG,'大切なお知らせ(オフにできません)'],['メッセージ','管理者からの返信など']];
+let NP={},VAPID=null,SUBREF=false,FRONCE=false;
+const b64u2u8=s=>{const r=atob((s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/')),u=new Uint8Array(r.length);for(let i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u};
+const u82b64u=u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)};
+async function loadNp(){try{const s=await db.doc('pushsubs/'+PID).get();NP=s.exists?(s.data().np||{}):{}}catch(x){NP={}}}
+const npOn=g=>g==IMPG||NP[g]!==false;
+const npToggles=()=>NG.map(([g,d])=>`<label class=nrow><span><b style="color:${G[g]||'#64748b'}">●</b> ${e(g)}<small>${e(d)}</small></span><span class=sw><input type=checkbox data-g="${e(g)}" ${npOn(g)?'checked':''} ${g==IMPG?'disabled':''} onchange="npSave()"><i></i></span></label>`).join('');
+function npRead(){const o={};document.querySelectorAll('[data-g]').forEach(c=>{o[c.dataset.g]=c.dataset.g==IMPG?true:c.checked});return o}
+function npSave(){NP=npRead();return db.doc('pushsubs/'+PID).set({np:NP,updatedAt:Date.now()},{merge:true}).catch(()=>toast('保存できませんでした'))}
+async function getVapid(){if(VAPID)return VAPID;try{const s=await db.doc('settings/push').get();VAPID=s.exists?s.data().vapid:null}catch(x){}return VAPID}
+async function saveSub(sub){
+  const j=sub.toJSON();
+  await db.doc('pushsubs/'+PID).set({subs:{[hid(j.endpoint)]:{endpoint:j.endpoint,keys:j.keys,ua:navigator.userAgent.slice(0,80),at:Date.now()}},updatedAt:Date.now()},{merge:true});
+}
+// 通知をオンにする。※ボタンを押した直後に呼ぶこと(最初に、iPhoneの「通知を許可しますか?」が出る)
+async function enablePush(){
+  if(!('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window))return 'unsupported';
+  const perm=await Notification.requestPermission();
+  if(perm!=='granted')return 'denied';
+  try{
+    const key=await getVapid();if(!key)return 'noserver';
+    const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(sub){const cur=sub.options&&sub.options.applicationServerKey;if(cur&&u82b64u(new Uint8Array(cur))!==key){await sub.unsubscribe();sub=null}}
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u2u8(key)});
+    await saveSub(sub);return 'ok';
+  }catch(x){return 'error'}
+}
+async function pushState(){
+  if(!('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window))return 'unsupported';
+  if(Notification.permission=='denied')return 'denied';
+  if(Notification.permission=='granted'){try{const r=await navigator.serviceWorker.getRegistration();const s=r&&await r.pushManager.getSubscription();return s?'on':'off'}catch(x){return 'off'}}
+  return 'off';
+}
+async function refreshSub(){ // すでに許可ずみなら、登録情報を最新にしておく
+  if(SUBREF||!('Notification' in window)||!('serviceWorker' in navigator)||Notification.permission!='granted')return;SUBREF=true;
+  try{const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;const s=await reg.pushManager.getSubscription();if(s)await saveSub(s)}catch(x){}
+}
+const RESM={ok:'通知をオンにしました',denied:'通知が許可されませんでした。あとから、端末の「設定」アプリで変えられます',noserver:'通知の準備がまだできていません。管理者に伝えてください',unsupported:'この端末では通知を使えません',error:'通知をオンにできませんでした'};
+async function npRender(sel){
+  const box=$(sel);if(!box)return;await loadNp();const st=await pushState();
+  const msg={unsupported:'この端末・ブラウザでは通知を使えません。iPhone・iPadは、ホーム画面に追加したアプリで使えます。',denied:'通知がオフになっています。端末の「設定」アプリで、Briblyの通知を許可してください。',on:'通知はオンです。',off:''}[st];
+  box.innerHTML=`${npToggles()}<p class=s>${msg}</p>${st=='off'?'<button class="b big" onclick="npEnable()">通知をオンにする</button>':''}`;
+}
+async function npEnable(){const r=await enablePush();toast(RESM[r]);npRender('#npbox')}
+// iPhone・iPadのホーム画面のアプリを、はじめて開いたとき(端末ごとに1回): 使い方 → 通知の設定 → iPhoneの許可画面
+const npKey=()=>'bribly_np_'+PID;
+const needFirstRun=()=>{try{return isIOS()&&isStandalone()&&!localStorage.getItem(npKey())}catch(x){return false}};
+async function maybeFirstRun(){
+  if(FRONCE||!needFirstRun())return;FRONCE=true;
+  await loadMeta();
+  if(!TUTSEEN)showTutorial(showNotifSetup);else showNotifSetup();
+}
+async function showNotifSetup(){
+  await loadNp();
+  const d=document.createElement('dialog');
+  d.innerHTML=`<div><div class=tuti>${IC(I.bell,44,1.8)}</div><h3 style="text-align:center;margin:0 0 4px">通知の設定</h3>
+   <p class=s style="text-align:center;margin:0 0 6px">どんなお知らせを、スマホの通知で受け取りますか?</p>
+   <div id=npl>${npToggles()}</div><p id=npm class=s style="text-align:center;min-height:36px;margin:8px 0 0"></p>
+   <button class="b big" id=npgo>通知をオンにする</button><button class="b g big" id=npskip>今はしない</button></div>`;
+  const fin=()=>{try{localStorage.setItem(npKey(),'1')}catch(x){}};
+  const done=m=>{d.querySelector('#npm').textContent=m;d.querySelector('#npgo').textContent='とじる';d.querySelector('#npgo').disabled=false;d.querySelector('#npgo').onclick=()=>d.close();d.querySelector('#npskip').remove()};
+  d.querySelector('#npgo').onclick=async()=>{
+    const bt=d.querySelector('#npgo');bt.disabled=true;
+    const p=enablePush();            // ← ここで、iPhoneの「通知を許可しますか?」が出ます
+    await npSave();fin();
+    done(RESM[await p]);
+  };
+  d.querySelector('#npskip').onclick=async()=>{await npSave();fin();d.close()};
+  d.onclose=()=>d.remove();
+  document.body.append(d);d.showModal();
+}
+
 /* ---------- お知らせ(全員宛てのものは、登録前に送られたものも見られます) ---------- */
 async function news(){
   const l=(await db.collection('notices').get()).docs.map(d=>({id:d.id,...d.data()})).filter(forMe).sort((a,b)=>b.createdAt-a.createdAt);
@@ -722,6 +808,7 @@ function me(){
   <div class=card><dl><dt>名前</dt><dd>${e(P.last+' '+P.first)}</dd><dt>ログインID</dt><dd>${e(P.sid)}</dd><dt>シリアルコード</dt><dd>${e(P.serial)}</dd><dt>パスワード</dt><dd>********</dd></dl></div>
   <details><summary>パスワードを変更する</summary><input id=op type=password placeholder=現在のパスワード><input id=n1 type=password placeholder=新しいパスワード><input id=n2 type=password placeholder=新しいパスワード(確認)>
    <p class=s>${PWMSG}</p><button class="b big" onclick=chgPw()>変更する</button></details>
+  <details ontoggle="if(this.open)npRender('#npbox')"><summary>通知の設定</summary><div id=npbox><p class=s>読み込み中…</p></div></details>
   <details><summary>管理者に連絡・相談する</summary>
    <label>名前</label><input value="${e(P.last+' '+P.first)}" disabled>
    <label>内容</label><select id=cc><option>アプリの修正希望・バグ報告</option><option>ファイル(教材)の修正希望・バグ報告</option><option>その他</option></select>
