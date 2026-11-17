@@ -128,14 +128,20 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .sw i{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.2s}
 .sw i::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px #0004}
 .sw input:checked+i{background:#16a34a}.sw input:checked+i::after{left:23px}.sw input:disabled+i{opacity:.55}
+.shell{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+.shell header{flex:none}
+.shell .mwrap{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.shell main{padding-bottom:24px}
+.shell nav{position:static;flex:none}
+html,body{overscroll-behavior:none}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.0"></script>
-<script src="legal.js?v=3.4.0"></script>
+<script src="common.js?v=3.4.1"></script>
+<script src="legal.js?v=3.4.1"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -264,7 +270,7 @@ async function boot(u){
   U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;SQ.q='';SQ.g='';SQ.s='';SEEN=undefined;render();
 }
 function render(){
-  show(`<header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<div class=shell><header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><div class=mwrap><main id=m></main></div><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav></div>`);
   ({shelf,news,me})[tab]();
   checkNews();
   if(tab=='shelf'&&!FIRST&&!needFirstRun())showImportant();
@@ -339,7 +345,8 @@ async function shelf(){
 }
 const crumb=x=>{const a=[];let p=items.find(i=>i.id==x.parent);while(p){a.unshift(p.name);p=items.find(i=>i.id==p.parent)}return a.join(' / ')};
 function goFolder(id){const a=[];let p=items.find(i=>i.id==id);while(p){a.unshift(p.id);p=items.find(i=>i.id==p.parent)}path=a;SQ.q='';SQ.g='';drawShelf()}
-function drawShelf(){
+const toTop=()=>{const w=document.querySelector('.mwrap');if(w)w.scrollTop=0};
+function drawShelf(){toTop();
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
   const seg=`<div class=seg><button class="${VP=='auto'?'on':''}" onclick="setView('auto')">自動</button><button class="${VP=='list'?'on':''}" onclick="setView('list')">${IC(I.list,18)}</button><button class="${VP=='tile'?'on':''}" onclick="setView('tile')">${IC(I.grid,18)}</button></div>`;
   const head=path.length?`<div class=row2><button class="b g ib" onclick="path.pop();drawShelf()">${IC(I.back,18)}</button>${seg}</div><h2>${e(pf?.name)}</h2><p class=subt>${e(pf?.body)}</p>`:`<div class=row2><h2 style="margin:6px 0">本棚</h2>${seg}</div>`;
@@ -365,6 +372,7 @@ function drawList(){
 
 /* ---------- ファイルの画面 ---------- */
 async function openFile(id){
+  toTop();
   const it=items.find(x=>x.id==id);
   if(!it){cur=null;return drawShelf()}
   if(lvl(it)=='p')return openLocked(it);
@@ -800,7 +808,7 @@ async function news(){
   document.querySelectorAll('nav .nd').forEach(x=>x.remove());
   $('#m').innerHTML='<h2>お知らせ</h2>'+(l.map((n,i)=>`<div class=it onclick=nd(${i}) style="display:block">${n.createdAt>was?'<i class=nd2></i>':''}<span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><b>${e(n.subject)}</b><div class=s>${fmt(n.createdAt)}</div></div>`).join('')||'<p class=s>お知らせはありません</p>');
 }
-function nd(i){const n=_n[i];$('#m').innerHTML=`<button class="b g" onclick=news()>戻る</button><h2>${e(n.subject)}</h2><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><span class=s>${fmt(n.createdAt)}</span><div class=card style="white-space:pre-wrap">${e(n.body)}</div>`}
+function nd(i){toTop();const n=_n[i];$('#m').innerHTML=`<button class="b g" onclick=news()>戻る</button><h2>${e(n.subject)}</h2><span class=chip style="background:${G[n.genre]||'#666'}">${e(n.genre)}</span><span class=s>${fmt(n.createdAt)}</span><div class=card style="white-space:pre-wrap">${e(n.body)}</div>`}
 
 /* ---------- マイページ ---------- */
 function me(){

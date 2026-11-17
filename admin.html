@@ -34,14 +34,20 @@ input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0}
 .b:disabled{opacity:.35;cursor:not-allowed}
 .dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;color:#fff;font-size:12px;font-weight:800;margin-right:6px;vertical-align:middle}
 dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::backdrop{background:#0008}
+.shell{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+.shell header{flex:none}
+.shell .mwrap{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.shell main{padding-bottom:24px}
+.shell nav{position:static;flex:none}
+html,body{overscroll-behavior:none}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.0"></script>
-<script src="legal.js?v=3.4.0"></script>
+<script src="common.js?v=3.4.1"></script>
+<script src="legal.js?v=3.4.1"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -142,7 +148,7 @@ auth.onAuthStateChanged(async u=>{
   A=u;loadLegal();render();
 });
 function render(){
-  show(`<header><span style="display:flex;align-items:center;gap:10px">${logoSvg(28,'#fff','#1f2937')}Bribly<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><main id=m></main><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav>`);
+  show(`<div class=shell><header><span style="display:flex;align-items:center;gap:10px">${logoSvg(28,'#fff','#1f2937')}Bribly<i>管理者</i></span><button class="b g" onclick="auth.signOut()">ログアウト</button></header><div class=mwrap><main id=m></main></div><nav>${[['shelf','本棚'],['news','お知らせ'],['set','設定']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('')}</nav></div>`);
   ({shelf,news,set})[tab]();
   badge();
 }
