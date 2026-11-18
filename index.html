@@ -128,7 +128,7 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .sw i{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:.2s}
 .sw i::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px #0004}
 .sw input:checked+i{background:#16a34a}.sw input:checked+i::after{left:23px}.sw input:disabled+i{opacity:.55}
-.shell{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+.shell{display:flex;flex-direction:column;position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden}
 .shell header{flex:none}
 .shell .mwrap{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .shell main{padding-bottom:24px}
@@ -140,8 +140,8 @@ html,body{overscroll-behavior:none}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.1"></script>
-<script src="legal.js?v=3.4.1"></script>
+<script src="common.js?v=3.4.2"></script>
+<script src="legal.js?v=3.4.2"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -271,6 +271,7 @@ async function boot(u){
 }
 function render(){
   show(`<div class=shell><header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><div class=mwrap><main id=m></main></div><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav></div>`);
+  fitFull();
   ({shelf,news,me})[tab]();
   checkNews();
   if(tab=='shelf'&&!FIRST&&!needFirstRun())showImportant();
@@ -447,7 +448,7 @@ async function openViewer(id,startPage){
   <div id=vs class=vscroll><div id=vp class=vpages><p class=vld>読み込み中…</p></div></div>
   <button id=fab class=fab onclick=enterEdit()>${IC(I.pen,26)}<span>書き込み</span></button>
   <div id=vtb class=vtb hidden><div id=vopt class=vopt></div><div class=vtools>${[['hand',I.hand],['pen',I.pen],['mk',I.mk],['er',I.er],['stk',I.stk]].map(([k,p])=>`<button data-t=${k} onclick="setTool('${k}')">${IC(p,24)}</button>`).join('')}<button onclick=vClear()>${IC(I.trash,24)}</button><button class=vdone onclick=exitEdit()>${IC(I.check,24)}</button></div></div>`;
-  document.body.append(d);document.body.style.overflow='hidden';vApply();
+  document.body.append(d);document.body.style.overflow='hidden';fitFull();vApply();
   const s=$('#vs');
   s.addEventListener('pointerdown',vDown);s.addEventListener('pointermove',vMove);s.addEventListener('pointerup',vUp);s.addEventListener('pointercancel',vUp);s.addEventListener('lostpointercapture',vUp);
   s.addEventListener('wheel',ev=>{if(ev.ctrlKey){ev.preventDefault();const r=s.getBoundingClientRect();setZoom(V.z*Math.exp(-ev.deltaY*.01),ev.clientX-r.left,ev.clientY-r.top)}},{passive:false});
@@ -692,6 +693,17 @@ function showA2HS(){
 }
 
 /* ---------- iPhone・iPad: ホーム画面に追加したアプリから使う(新規登録だけブラウザでできる) ---------- */
+// iPhone・iPadのホーム画面のアプリで、下のタブバーが浮くのを防ぐ:
+// 画面の高さをそのまま使う(全画面で開いているときだけ。窓で開いているiPadは対象外)
+function fitFull(){
+  const els=document.querySelectorAll('.shell,.viewer');
+  const on=isIOS()&&isStandalone();
+  const p=matchMedia('(orientation: portrait)').matches,big=Math.max(screen.width,screen.height),small=Math.min(screen.width,screen.height);
+  const ok=on&&Math.abs(innerWidth-(p?small:big))<=2&&(p?big:small)>innerHeight+2;
+  els.forEach(s=>{if(ok){s.style.bottom='auto';s.style.height=(p?big:small)+'px'}else{s.style.bottom='';s.style.height=''}});
+}
+window.addEventListener('resize',fitFull);
+window.addEventListener('orientationchange',()=>setTimeout(fitFull,300));
 let GATEMSG='';
 const GATE=()=>isIOS()&&!isStandalone();
 // いま開いているのが、Safari以外のアプリ・ブラウザなら、その名前(Safariなら空)
@@ -827,7 +839,7 @@ function me(){
   <details><summary>退会・アカウント削除</summary><label>退会の理由・ご意見(任意)</label><textarea id=wr rows=3></textarea>
    <button class="b r big" onclick=withdraw()>退会・アカウント削除</button></details>
   <div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシー</button><button class="b g" onclick="showTutorial()">使い方</button></div>
-  <button class="b g" onclick="auth.signOut()">ログアウト</button>${verHtml()}`;
+  <button class="b g" onclick="auth.signOut()">ログアウト</button>${verHtml()}<p class=ver style="margin-top:4px">画面 ${innerWidth}×${innerHeight} / 端末 ${screen.width}×${screen.height}${isStandalone()?' / アプリ表示':''}</p>`;
 }
 async function reauth(p){await U.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(U.email,p))}
 async function chgPw(){
