@@ -46,8 +46,8 @@ html,body{overscroll-behavior:none}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.2"></script>
-<script src="legal.js?v=3.4.2"></script>
+<script src="common.js?v=3.4.4"></script>
+<script src="legal.js?v=3.4.4"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -297,7 +297,7 @@ async function news(pre){
     const l=(await col('notices')).sort((a,b)=>b.createdAt-a.createdAt);window._n=l;
     $('#m').innerHTML=subBar()+(l.map((n,i)=>`<div class=card><span class=chip style="background:${G[n.genre]}">${e(n.genre)}</span><b>${e(n.subject)}</b>
      <div class=s>${fmt(n.createdAt)} / 宛先: ${n.to.includes('all')?'全員':n.to.map(u=>e(users.find(x=>x.id==u)?.last||'退会済')).join(', ')} / ${n.to.includes('all')||n.future?'今後の登録者にも表示':'今後の登録者には非表示'}${pushLabel(n)}</div>
-     <div class=row style=margin-top:8px><button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
+     <div class=row style=margin-top:8px>${n.push&&n.pushed===false?`<button class=b onclick="pushKick(true).then(()=>news())">いますぐ送る</button>`:''}<button class=b onclick="sub='send';news(_n[${i}])">編集</button><button class="b r" onclick="delN('${n.id}')">削除</button></div></div>`).join('')||'<p class=s>まだありません</p>');
     return;
   }
   const rq=(await col('requests')).map(r=>({...r,type:'access',uid:r.pid}));
@@ -358,8 +358,9 @@ function compose(p={}){
   <label>送り先</label><div class=row><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=true)">すべて選択</button><button class="b g" onclick="document.querySelectorAll('.rc').forEach(c=>c.checked=false)">選択解除</button></div>
   <div class=who>${users.map(u=>`<label class=rl><input type=checkbox class=rc value="${u.id}" ${all||to.includes(u.id)?'checked':''}>${e(u.last+' '+u.first)} (${e(u.sid)})</label>`).join('')}</div>
   <label class=rl><input type=checkbox id=fut ${fut?'checked':''}>これより後に登録した人にも表示する</label><p class=s>オフにすると、いま登録している人だけに表示されます。</p>
-  <label class=rl><input type=checkbox id=psh ${psh?'checked':''}>スマホに通知も送る</label><p class=s>通知をオンにしている人のスマホに、ポップアップが届きます(数分かかることがあります)。</p>
+  <label class=rl><input type=checkbox id=psh ${psh?'checked':''}>スマホに通知も送る</label><p class=s>通知をオンにしている人のスマホに、ポップアップが届きます。</p><p id=ghs class=s></p>
   <button class="b big" onclick="sendN('${p.id||''}')">${p.id?'更新する':'送付する'}</button></div>`;
+  ghStatus();
 }
 async function sendN(id){
   const ch=[...document.querySelectorAll('.rc:checked')].map(c=>c.value);
@@ -369,8 +370,9 @@ async function sendN(id){
   const psh=$('#psh').checked;d.push=psh;if(psh)d.pushed=false;else if(id)d.pushed=true; // 通知を送る/送らない
   id?await db.doc('notices/'+id).update(d):await db.collection('notices').add({...d,createdAt:Date.now()});
   const rt=$('#cmp')?.dataset.rt;if(rt)await db.doc('inbox/'+rt).update({handled:true,handledAt:Date.now()}); // 返信したら赤い表示を消す
-  if(psh)await pushKick().catch(()=>{});
-  alert('送付しました'+(psh?'\n通知は、数分以内にスマホへ届きます。':''));sub='hist';news();
+  let msg='送付しました';
+  if(psh){const r=await kick();msg+=r.st==204?'\n通知を、いますぐ送り始めました(1分ほどで届きます)。':'\n通知は予約しました。ただし、すぐには送れませんでした。\n'+WHY[r.why]+'\n数分〜数時間後に、自動で送られます。'}
+  alert(msg);sub='hist';news();
 }
 
 /* ---------- スマホへの通知(鍵・設定・送信) ---------- */
@@ -380,14 +382,25 @@ async function pushCard(){
   let cfg={},n=0;
   try{const s=await db.doc('settings/push').get();cfg=s.exists?s.data():{}}catch(x){}
   try{n=(await col('pushsubs')).filter(x=>Object.keys(x.subs||{}).length).length}catch(x){}
-  const tk=localStorage.getItem('bribly_gh')?'設定ずみ':'未設定';
-  box.innerHTML=`<p>通知の鍵: <b>${cfg.vapid?'作成ずみ':'まだ作っていません'}</b> / 通知をオンにしている人: <b>${n}人</b></p>
-   <div class=row><button class=b onclick=makeVapid()>${cfg.vapid?'鍵を作り直す':'鍵を作る'}</button><button class="b g" onclick=pushHelp()>設定のしかた</button></div>
-   <label style="margin-top:12px">すぐ送るためのGitHubトークン(任意・${tk})</label>
-   <input id=ghk type=password placeholder="空のままでも、数分おきに自動で送られます">
-   <div class=row><button class="b g" onclick=saveGh()>保存</button><button class="b g" onclick="pushKick(true)">いま送信を実行</button></div>`;
+  const has=!!(await getGh());
+  box.innerHTML=`<p><span class=tag style="background:${has?'#16a34a':'#b91c1c'}">すぐ送る: ${has?'オン':'オフ'}</span>${has?'':' <b style="color:#b91c1c">オフのままだと、通知が数分〜数時間おくれたり、送られないことがあります</b>'}</p>
+   <p>通知の鍵: <b>${cfg.vapid?'作成ずみ':'まだ作っていません'}</b> / 通知をオンにしている人: <b>${n}人</b></p>
+   <div class=row><button class=b onclick=makeVapid()>${cfg.vapid?'鍵を作り直す':'鍵を作る'}</button><button class="b g" onclick=pushHelp()>通知のしくみ</button></div>
+   <label style="margin-top:12px">「すぐ送る」のためのGitHubトークン(1回入れれば、お知らせのたびに入れる必要はありません)</label>
+   <input id=ghk type=password placeholder="${has?'設定ずみ(変えるときだけ貼る)':'github_pat_ で始まる文字を貼る'}">
+   <div class=row><button class=b onclick=saveGh()>保存</button><button class="b g" onclick="pushKick(true)">いま送信を実行</button><button class="b g" onclick=ghHelp()>トークンの作り方</button></div>`;
 }
-function saveGh(){const v=$v('#ghk').trim();if(v)localStorage.setItem('bribly_gh',v);else localStorage.removeItem('bribly_gh');pushCard();alert('保存しました')}
+async function saveGh(){
+  const v=$v('#ghk').trim();
+  if(!v){if(!confirm('保存ずみのトークンを削除しますか?'))return;localStorage.removeItem('bribly_gh');try{await db.doc('adminsecrets/gh').delete()}catch(x){}pushCard();return alert('削除しました')}
+  localStorage.setItem('bribly_gh',v);
+  let synced=true;try{await db.doc('adminsecrets/gh').set({token:v,at:Date.now()})}catch(x){synced=false}
+  const r=await ghCall('/actions/workflows/push.yml');
+  pushCard();
+  alert(r.st==200
+    ?'保存しました。GitHubにつながりました。'+(synced?'\nほかの端末でも、自動で使えます。':'\n(この端末だけで使えます。ほかの端末でも使うには、Firebaseのルールを貼り替えてください)')
+    :'保存しましたが、つながりませんでした。\n'+WHY[r.why]+(r.st==404?'\n(GitHubに push.yml があるかも確認してください)':''));
+}
 // 通知の鍵を、この画面(ブラウザ)の中で作る。公開用はFirebaseに保存、秘密用は1回だけ表示する
 async function makeVapid(){
   if(!confirm('通知の鍵を作ります。\n(すでにある場合は作り直しになり、みんなの通知の登録がやり直しになります)'))return;
@@ -401,30 +414,63 @@ async function makeVapid(){
   document.body.append(d);d.showModal();
   d.querySelector('#pkc').onclick=async()=>{try{await navigator.clipboard.writeText(priv)}catch(x){$('#pk').select();document.execCommand('copy')}d.querySelector('#pkc').textContent='コピーしました'};
 }
-function pushHelp(){
+function ghHelp(){
   const d=document.createElement('dialog');
-  d.innerHTML=`<h3>通知のしくみと設定のしかた</h3><div style="font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">
-   <p>お知らせの「スマホに通知も送る」をオンにして送ると、GitHub上の送信用プログラムが、数分おきに確認して、利用者のスマホに通知を送ります。最初に、次の設定を1回だけします。</p>
-   <ol><li>この画面の「鍵を作る」を押し、表示された<b>秘密の鍵</b>をコピーします。</li>
-   <li>GitHubのリポジトリ →「Settings」→「Secrets and variables」→「Actions」→「New repository secret」を押します。名前に <b>VAPID_PRIVATE_KEY</b>、中身に、コピーした鍵を貼って保存します。</li>
-   <li>Firebaseの「プロジェクトの設定」→「サービス アカウント」→「新しい秘密鍵を生成」で、ファイルをダウンロードします。そのファイルを<b>メモ帳で開いて、中身を全部コピー</b>し、GitHubのSecretに、名前 <b>FIREBASE_SERVICE_ACCOUNT</b> で貼って保存します。</li>
-   <li>GitHubのリポジトリに、<b>push</b>フォルダ(中の2ファイル)と、<b>sw.js</b>を上書きアップロードします。さらに「Add file → Create new file」で、名前を <b>.github/workflows/push.yml</b> にして、<b>push-workflow.yml</b>の中身を貼り、保存します。</li>
-   <li>GitHubの「Actions」タブを開き、有効にします。</li></ol>
-   <p><b>すぐに送りたいとき(任意):</b> GitHubの「Settings → Developer settings → Fine-grained tokens」で、このリポジトリだけ・「Actions」を「Read and write」にしたトークンを作り、上の欄に貼って保存します。そうすると、お知らせを送った直後に、送信が始まります。</p>
-   <p class=s>利用者は、マイページの「通知の設定」、または、ホーム画面のアプリを初めて開いたときの画面から、通知をオンにします。</p></div>
+  d.innerHTML=`<h3>「すぐ送る」のトークンの作り方</h3><div style="font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">
+   <p>トークンは、この管理者サイトが、GitHubのロボットに「いま起きて」と頼むための<b>合鍵</b>です。1回だけ作って、貼れば使えます。</p>
+   <ol><li>GitHubを開き、右上の自分のアイコン →「Settings」を押します。</li>
+   <li>左の一番下の「Developer settings」→「Personal access tokens」→「Fine-grained tokens」→「Generate new token」を押します。</li>
+   <li>Token name は <b>bribly</b>。Expiration(期限)は、いちばん長いもの(1年)にします。Repository access は「Only select repositories」で、<b>このリポジトリ(hayaken-viewer)だけ</b>を選びます。</li>
+   <li>「Permissions」→「Repository permissions」の「<b>Actions</b>」を <b>Read and write</b> にします(ほかはそのまま)。</li>
+   <li>「Generate token」を押し、表示された <b>github_pat_</b> で始まる文字をコピーします(1回しか表示されません)。</li>
+   <li>この設定画面の欄に貼って「保存」を押します。「GitHubにつながりました」と出れば成功です。</li></ol>
+   <p class=s>期限(1年)が切れたら、作り直して貼り直してください。トークンは、このリポジトリのロボットを動かすことしかできません。</p></div>
    <p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
   document.body.append(d);d.showModal();
 }
-// GitHubの送信プログラムを、いますぐ動かす(トークンを入れたときだけ)
-async function pushKick(show){
-  const tk=localStorage.getItem('bribly_gh');
-  if(!tk){if(show)alert('トークンが未設定です。数分以内に、自動で送られます。');return false}
+function pushHelp(){
+  const d=document.createElement('dialog');
+  d.innerHTML=`<h3>通知のしくみ</h3><div style="font-size:14px;line-height:1.7;max-height:60vh;overflow:auto">
+   <p>通知を送る仕事は、GitHub上の<b>ロボット</b>がします。ロボットは、動いたときだけ、「通知つきで送ったお知らせ」を探して、利用者のスマホに送ります。ロボットを動かす方法は2つあります。</p>
+   <ol><li><b>時計(5分おきの予定):</b> GitHubが「できたら」動かします。ただ、GitHubは混んでいると、数時間おくらせたり、飛ばしたりします。あてにできません。</li>
+   <li><b>呼び出し(すぐ送る):</b> お知らせを送った直後に、この管理者サイトがGitHubに「いま動いて」と頼みます。1分ほどで届きます。この頼む権利の証明が<b>トークン</b>です。</li></ol>
+   <p><b>トークンは、1回入れるだけ</b>です。この端末と、管理者だけが読めるFirebaseに保存されるので、お知らせのたびに入れる必要はなく、ほかの端末でも自動で使えます。期限が切れたときだけ、作り直します。</p>
+   <p>「すぐ送る」がオフのときは、通知は予約されるだけで、時計のタイミングまで待つことになります。設定の「すぐ送る」が<b>オン</b>になっているか、確認してください。</p>
+   <hr><p><b>最初の設定(1回だけ)</b></p>
+   <ol><li>「鍵を作る」を押し、表示された<b>秘密の鍵</b>をコピーします。</li>
+   <li>GitHubの「Settings → Secrets and variables → Actions」で、名前 <b>VAPID_PRIVATE_KEY</b> に、その鍵を貼って保存します。</li>
+   <li>Firebaseの「プロジェクトの設定 → サービス アカウント → 新しい秘密鍵を生成」のファイルの中身を、GitHubのSecret <b>FIREBASE_SERVICE_ACCOUNT</b> に貼ります。</li>
+   <li>GitHubに、<b>send.js</b>、<b>package.json</b>、<b>sw.js</b>、<b>.github/workflows/push.yml</b>を入れます。</li>
+   <li>上の「トークンの作り方」で、「すぐ送る」をオンにします。</li></ol></div>
+   <p><button class=b onclick="this.closest('dialog').remove()">閉じる</button></p>`;
+  document.body.append(d);d.showModal();
+}
+// GitHubの送信プログラムを、いますぐ動かす(トークンがあるときだけ)
+// トークンは、一度入れると、この端末に保存され、管理者だけが読めるFirebaseにも保存される(別の端末でも自動で使える)
+async function getGh(){
+  let tk=localStorage.getItem('bribly_gh');
+  if(!tk){try{const s=await db.doc('adminsecrets/gh').get();if(s.exists&&s.data().token){tk=s.data().token;localStorage.setItem('bribly_gh',tk)}}catch(x){}}
+  return tk||'';
+}
+async function ghCall(path,opt={}){
+  const tk=await getGh();if(!tk)return {st:0,why:'notoken'};
   const owner=location.hostname.split('.')[0],repo=location.pathname.split('/').filter(Boolean)[0]||'';
   try{
-    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/push.yml/dispatches`,{method:'POST',headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json'},body:JSON.stringify({ref:'main'})});
-    if(show)alert(r.status==204?'送信を始めました。':'始められませんでした(トークンの権限や、リポジトリ名を確認してください)');
-    return r.status==204;
-  }catch(x){if(show)alert('始められませんでした');return false}
+    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}${path}`,{...opt,headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json'}});
+    return {st:r.status,why:r.status==401?'expired':(r.status==403||r.status==404)?'perm':r.ok?'ok':'error'};
+  }catch(x){return {st:-1,why:'net'}}
+}
+const kick=()=>ghCall('/actions/workflows/push.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main'})});
+const WHY={ok:'',notoken:'「すぐ送る」の設定がまだありません',expired:'トークンの期限が切れているか、まちがっています',perm:'トークンの権限か、リポジトリ名が合っていません(Actionsを「Read and write」にしてください)',error:'GitHubが受け付けませんでした',net:'ネットワークにつながりませんでした'};
+async function pushKick(show){
+  const r=await kick(),ok=r.st==204;
+  if(show)alert(ok?'送信を始めました。1分ほどで届きます。':'始められませんでした。\n'+WHY[r.why]);
+  return ok;
+}
+async function ghStatus(){
+  const has=!!(await getGh()),b=$('#ghs');if(!b)return;
+  b.innerHTML=has?'<span style="color:#16a34a;font-weight:700">すぐ送る: オン</span>(送ると、1分ほどで届きます)'
+    :`<span style="color:#b91c1c;font-weight:700">すぐ送る: オフ</span> このままだと、届くまで数分〜数時間かかることがあります。<a href=# onclick="tab='set';render();return false">設定する</a>`;
 }
 
 /* ---------- 設定 ---------- */

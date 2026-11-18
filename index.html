@@ -134,14 +134,19 @@ nav{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 .shell main{padding-bottom:24px}
 .shell nav{position:static;flex:none}
 html,body{overscroll-behavior:none}
+.mwrap{background:#f1f5f9}
+html.deadbot,html.deadbot body{background:#fff}
+html.deadbot nav{padding-bottom:8px}
+html.deadbot .vdock{padding-bottom:6px}
+html.deadbot .fab{bottom:14px}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.2"></script>
-<script src="legal.js?v=3.4.2"></script>
+<script src="common.js?v=3.4.4"></script>
+<script src="legal.js?v=3.4.4"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -693,14 +698,20 @@ function showA2HS(){
 }
 
 /* ---------- iPhone・iPad: ホーム画面に追加したアプリから使う(新規登録だけブラウザでできる) ---------- */
-// iPhone・iPadのホーム画面のアプリで、下のタブバーが浮くのを防ぐ:
-// 画面の高さをそのまま使う(全画面で開いているときだけ。窓で開いているiPadは対象外)
+// iPhone・iPadのホーム画面のアプリは、画面より下の一部(約59pt)を、アプリに描かせてくれないことがある。
+// その部分は背景色で塗られるので、白にして、タブバーとつなげて見せる
 function fitFull(){
-  const els=document.querySelectorAll('.shell,.viewer');
+  document.querySelectorAll('.shell,.viewer').forEach(s=>{s.style.bottom='';s.style.height=''});
   const on=isIOS()&&isStandalone();
   const p=matchMedia('(orientation: portrait)').matches,big=Math.max(screen.width,screen.height),small=Math.min(screen.width,screen.height);
-  const ok=on&&Math.abs(innerWidth-(p?small:big))<=2&&(p?big:small)>innerHeight+2;
-  els.forEach(s=>{if(ok){s.style.bottom='auto';s.style.height=(p?big:small)+'px'}else{s.style.bottom='';s.style.height=''}});
+  const gap=on&&Math.abs(innerWidth-(p?small:big))<=2?Math.max(0,(p?big:small)-innerHeight):0;
+  document.documentElement.classList.toggle('deadbot',gap>=2);
+}
+// マイページの下に出す、画面の大きさの情報(表示がおかしいときの調査用)
+function diagHtml(){
+  const pr=document.createElement('div');pr.style.cssText='position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top)';document.body.append(pr);const st=pr.offsetHeight;
+  pr.style.cssText='position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom)';const sb=pr.offsetHeight;pr.remove();
+  return `${diagHtml()}`;
 }
 window.addEventListener('resize',fitFull);
 window.addEventListener('orientationchange',()=>setTimeout(fitFull,300));
