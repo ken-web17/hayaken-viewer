@@ -145,8 +145,8 @@ html.deadbot .fab{bottom:14px}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.4"></script>
-<script src="legal.js?v=3.4.4"></script>
+<script src="common.js?v=3.4.5"></script>
+<script src="legal.js?v=3.4.5"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -274,8 +274,16 @@ async function boot(u){
   if(!s||!s.exists||s.data().banned){await auth.signOut();return loginView('このアカウントは利用できません')}
   U=u;PID=pid;P=s.data();tab='shelf';path=[];cur=null;SQ.q='';SQ.g='';SQ.s='';SEEN=undefined;render();
 }
+// 下のタブを押したとき: ほかのタブから来たなら、そのタブのトップを表示。同じタブをもう一度押したら、トップに戻す
+function goTab(t){
+  const same=tab==t;tab=t;cur=null;
+  if(t=='shelf'){path=[];SQ.q='';SQ.g=''}
+  if(!same){render();return}
+  if(t=='shelf')drawShelf();else if(t=='news')news();else me();
+  toTop();
+}
 function render(){
-  show(`<div class=shell><header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><div class=mwrap><main id=m></main></div><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="tab='${t[0]}';cur=null;render()">${t[1]}</button>`).join('')}</nav></div>`);
+  show(`<div class=shell><header>${logoSvg(28,'#fff','#1e3a8a')}<span>Bribly</span><button id=syncb class=syncb onclick=syncNow() aria-label="同期">${IC(I.sync,22)}</button></header><div class=mwrap><main id=m></main></div><nav>${[['shelf','本棚'],['news','お知らせ'],['me','マイページ']].map(t=>`<button class="${tab==t[0]?'on':''}" onclick="goTab('${t[0]}')">${t[1]}</button>`).join('')}</nav></div>`);
   fitFull();
   ({shelf,news,me})[tab]();
   checkNews();
@@ -746,27 +754,38 @@ function gateScreen(){
    ${msg?'':'<div class=or>はじめての方</div><button class="b g big" onclick=regView()>新規登録(ここからできます)</button>'}</div></div>`);
 }
 
-/* ---------- 通知(スマホのポップアップ)の設定と登録 ---------- */
+/* ---------- 通知(スマホのポップアップ)の設定と登録 ----------
+   「オン」かどうかは、端末の状態ではなく、「このアカウントが、この端末を選んだか」で決まる */
 const IMPG='重要なお知らせ';
 const NG=[['教材について(追加)','新しい教材が追加されたとき'],['教材について(更新)','教材が新しくなったとき'],['お知らせ','ふつうのお知らせ'],[IMPG,'大切なお知らせ(オフにできません)'],['メッセージ','管理者からの返信など']];
-let NP={},VAPID=null,SUBREF=false,FRONCE=false;
+let NP={},SUBKEYS=new Set(),VAPID=null,SUBREF=false,FRONCE=false,NPSEL='#npbox';
 const b64u2u8=s=>{const r=atob((s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/')),u=new Uint8Array(r.length);for(let i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u};
 const u82b64u=u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const hid=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)};
-async function loadNp(){try{const s=await db.doc('pushsubs/'+PID).get();NP=s.exists?(s.data().np||{}):{}}catch(x){NP={}}}
+const hasPush=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+async function loadNp(){try{const s=await db.doc('pushsubs/'+PID).get(),d=s.exists?s.data():{};NP=d.np||{};SUBKEYS=new Set(Object.keys(d.subs||{}))}catch(x){NP={};SUBKEYS=new Set()}}
 const npOn=g=>g==IMPG||NP[g]!==false;
 const npToggles=()=>NG.map(([g,d])=>`<label class=nrow><span><b style="color:${G[g]||'#64748b'}">●</b> ${e(g)}<small>${e(d)}</small></span><span class=sw><input type=checkbox data-g="${e(g)}" ${npOn(g)?'checked':''} ${g==IMPG?'disabled':''} onchange="npSave()"><i></i></span></label>`).join('');
 function npRead(){const o={};document.querySelectorAll('[data-g]').forEach(c=>{o[c.dataset.g]=c.dataset.g==IMPG?true:c.checked});return o}
 function npSave(){NP=npRead();return db.doc('pushsubs/'+PID).set({np:NP,updatedAt:Date.now()},{merge:true}).catch(()=>toast('保存できませんでした'))}
 async function getVapid(){if(VAPID)return VAPID;try{const s=await db.doc('settings/push').get();VAPID=s.exists?s.data().vapid:null}catch(x){}return VAPID}
+async function devSub(){try{const r=await navigator.serviceWorker.getRegistration();return r?await r.pushManager.getSubscription():null}catch(x){return null}}
 async function saveSub(sub){
-  const j=sub.toJSON();
-  await db.doc('pushsubs/'+PID).set({subs:{[hid(j.endpoint)]:{endpoint:j.endpoint,keys:j.keys,ua:navigator.userAgent.slice(0,80),at:Date.now()}},updatedAt:Date.now()},{merge:true});
+  const j=sub.toJSON(),k=hid(j.endpoint);
+  await db.doc('pushsubs/'+PID).set({subs:{[k]:{endpoint:j.endpoint,keys:j.keys,ua:navigator.userAgent.slice(0,80),at:Date.now()}},updatedAt:Date.now()},{merge:true});
+  SUBKEYS.add(k);
 }
-// 通知をオンにする。※ボタンを押した直後に呼ぶこと(最初に、iPhoneの「通知を許可しますか?」が出る)
+// この端末を、このアカウントから外す(通知が届かなくなる)
+async function dropSub(){
+  const s=await devSub();if(!s)return;const k=hid(s.endpoint);
+  try{await db.doc('pushsubs/'+PID).update({['subs.'+k]:firebase.firestore.FieldValue.delete()})}catch(x){}
+  SUBKEYS.delete(k);
+}
+async function disablePush(){const s=await devSub();await dropSub();if(s)try{await s.unsubscribe()}catch(x){}}
+// 通知をオンにする。※ボタン・スイッチを押した直後に呼ぶこと(最初に、iPhoneの「通知を許可しますか?」が出る)
 async function enablePush(){
-  if(!('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window))return 'unsupported';
-  const perm=await Notification.requestPermission();
+  if(!hasPush())return 'unsupported';
+  const perm=await Notification.requestPermission();  // すでに許可ずみのときは、画面は出ません
   if(perm!=='granted')return 'denied';
   try{
     const key=await getVapid();if(!key)return 'noserver';
@@ -777,23 +796,36 @@ async function enablePush(){
     await saveSub(sub);return 'ok';
   }catch(x){return 'error'}
 }
+// この端末の状態: unsupported(使えない) / denied(端末で拒否) / on(このアカウントでオン) / off
 async function pushState(){
-  if(!('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window))return 'unsupported';
+  if(!hasPush())return 'unsupported';
   if(Notification.permission=='denied')return 'denied';
-  if(Notification.permission=='granted'){try{const r=await navigator.serviceWorker.getRegistration();const s=r&&await r.pushManager.getSubscription();return s?'on':'off'}catch(x){return 'off'}}
-  return 'off';
+  const s=await devSub();
+  return s&&SUBKEYS.has(hid(s.endpoint))?'on':'off';
 }
-async function refreshSub(){ // すでに許可ずみなら、登録情報を最新にしておく
-  if(SUBREF||!('Notification' in window)||!('serviceWorker' in navigator)||Notification.permission!='granted')return;SUBREF=true;
-  try{const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;const s=await reg.pushManager.getSubscription();if(s)await saveSub(s)}catch(x){}
+// すでにオンにしている端末だけ、登録情報を最新にする(オンにしていない端末は、勝手に登録しない)
+async function refreshSub(){
+  if(SUBREF||!hasPush()||Notification.permission!='granted')return;SUBREF=true;
+  try{await loadNp();const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;const s=await reg.pushManager.getSubscription();if(s&&SUBKEYS.has(hid(s.endpoint)))await saveSub(s)}catch(x){}
 }
+async function doLogout(){try{await dropSub()}catch(x){}auth.signOut()} // ログアウトしたら、この端末への通知は止める
 const RESM={ok:'通知をオンにしました',denied:'通知が許可されませんでした。あとから、端末の「設定」アプリで変えられます',noserver:'通知の準備がまだできていません。管理者に伝えてください',unsupported:'この端末では通知を使えません',error:'通知をオンにできませんでした'};
+// マイページの「通知の設定」: 「この端末で通知を受け取る」(親のスイッチ) と、種類ごとのスイッチ
 async function npRender(sel){
-  const box=$(sel);if(!box)return;await loadNp();const st=await pushState();
-  const msg={unsupported:'この端末・ブラウザでは通知を使えません。iPhone・iPadは、ホーム画面に追加したアプリで使えます。',denied:'通知がオフになっています。端末の「設定」アプリで、Briblyの通知を許可してください。',on:'通知はオンです。',off:''}[st];
-  box.innerHTML=`${npToggles()}<p class=s>${msg}</p>${st=='off'?'<button class="b big" onclick="npEnable()">通知をオンにする</button>':''}`;
+  NPSEL=sel;const box=$(sel);if(!box)return;await loadNp();const st=await pushState();
+  const perm=hasPush()?Notification.permission:'';
+  const msg={unsupported:'この端末・ブラウザでは通知を使えません。iPhone・iPadは、ホーム画面に追加したアプリで使えます。',
+    denied:'端末で通知が許可されていません。「設定」アプリ →「通知」→「Bribly」で許可してから、もう一度オンにしてください。',
+    on:'オンです。',
+    off:perm=='granted'?'オフです。この端末はすでに許可ずみなので、オンにしても許可の画面は出ません。':'オフです。オンにすると、iPhoneの「通知を許可しますか?」が出ます。'}[st];
+  box.innerHTML=`<label class=nrow style="border-bottom:2px solid #cbd5e1"><span><b>この端末で通知を受け取る</b><small>${msg}</small></span><span class=sw><input type=checkbox id=npmaster ${st=='on'?'checked':''} ${st=='unsupported'?'disabled':''} onchange="npMaster(this)"><i></i></span></label>
+   <p class=s style="margin:12px 0 0"><b>受け取る通知の種類</b>${st=='on'?'':'(通知がオフのあいだは、届きません)'}</p><div style="${st=='on'?'':'opacity:.6'}">${npToggles()}</div>`;
 }
-async function npEnable(){const r=await enablePush();toast(RESM[r]);npRender('#npbox')}
+async function npMaster(el){
+  if(el.checked){const p=enablePush();el.disabled=true;toast(RESM[await p])}   // enablePush は、押した直後に呼ぶ(許可の画面を出すため)
+  else{el.disabled=true;await disablePush();toast('この端末の通知をオフにしました')}
+  npRender(NPSEL);
+}
 // iPhone・iPadのホーム画面のアプリを、はじめて開いたとき(端末ごとに1回): 使い方 → 通知の設定 → iPhoneの許可画面
 const npKey=()=>'bribly_np_'+PID;
 const needFirstRun=()=>{try{return isIOS()&&isStandalone()&&!localStorage.getItem(npKey())}catch(x){return false}};
@@ -810,14 +842,14 @@ async function showNotifSetup(){
    <div id=npl>${npToggles()}</div><p id=npm class=s style="text-align:center;min-height:36px;margin:8px 0 0"></p>
    <button class="b big" id=npgo>通知をオンにする</button><button class="b g big" id=npskip>今はしない</button></div>`;
   const fin=()=>{try{localStorage.setItem(npKey(),'1')}catch(x){}};
-  const done=m=>{d.querySelector('#npm').textContent=m;d.querySelector('#npgo').textContent='とじる';d.querySelector('#npgo').disabled=false;d.querySelector('#npgo').onclick=()=>d.close();d.querySelector('#npskip').remove()};
+  const done=m=>{d.querySelector('#npm').textContent=m;const g=d.querySelector('#npgo');g.textContent='とじる';g.disabled=false;g.onclick=()=>d.close();d.querySelector('#npskip').remove()};
   d.querySelector('#npgo').onclick=async()=>{
-    const bt=d.querySelector('#npgo');bt.disabled=true;
+    d.querySelector('#npgo').disabled=true;
     const p=enablePush();            // ← ここで、iPhoneの「通知を許可しますか?」が出ます
     await npSave();fin();
     done(RESM[await p]);
   };
-  d.querySelector('#npskip').onclick=async()=>{await npSave();fin();d.close()};
+  d.querySelector('#npskip').onclick=async()=>{await npSave();await dropSub();fin();d.close();toast('あとから、マイページの「通知の設定」でオンにできます')};
   d.onclose=()=>d.remove();
   document.body.append(d);d.showModal();
 }
@@ -850,7 +882,7 @@ function me(){
   <details><summary>退会・アカウント削除</summary><label>退会の理由・ご意見(任意)</label><textarea id=wr rows=3></textarea>
    <button class="b r big" onclick=withdraw()>退会・アカウント削除</button></details>
   <div class=card><button class="b g" onclick="showLegal('利用規約',TERMS)">利用規約</button><button class="b g" onclick="showLegal('プライバシーポリシー',PRIV)">プライバシーポリシー</button><button class="b g" onclick="showTutorial()">使い方</button></div>
-  <button class="b g" onclick="auth.signOut()">ログアウト</button>${verHtml()}<p class=ver style="margin-top:4px">画面 ${innerWidth}×${innerHeight} / 端末 ${screen.width}×${screen.height}${isStandalone()?' / アプリ表示':''}</p>`;
+  <button class="b g" onclick="doLogout()">ログアウト</button>${verHtml()}<p class=ver style="margin-top:4px">画面 ${innerWidth}×${innerHeight} / 端末 ${screen.width}×${screen.height}${isStandalone()?' / アプリ表示':''}</p>`;
 }
 async function reauth(p){await U.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(U.email,p))}
 async function chgPw(){
