@@ -40,14 +40,15 @@ dialog{width:min(560px,94vw);border:0;border-radius:12px;padding:20px}dialog::ba
 .shell main{padding-bottom:24px}
 .shell nav{position:static;flex:none}
 html,body{overscroll-behavior:none}
+.secret{-webkit-text-security:disc;text-security:disc}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.5"></script>
-<script src="legal.js?v=3.4.5"></script>
+<script src="common.js?v=3.4.6"></script>
+<script src="legal.js?v=3.4.6"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -371,7 +372,7 @@ async function sendN(id){
   id?await db.doc('notices/'+id).update(d):await db.collection('notices').add({...d,createdAt:Date.now()});
   const rt=$('#cmp')?.dataset.rt;if(rt)await db.doc('inbox/'+rt).update({handled:true,handledAt:Date.now()}); // 返信したら赤い表示を消す
   let msg='送付しました';
-  if(psh){const r=await kick();msg+=r.st==204?'\n通知を、いますぐ送り始めました(1分ほどで届きます)。':'\n通知は予約しました。ただし、すぐには送れませんでした。\n'+WHY[r.why]+'\n数分〜数時間後に、自動で送られます。'}
+  if(psh){const r=await kick();msg+=r.st==204?'\n通知を、いますぐ送り始めました(1分ほどで届きます)。':'\n通知は予約しました。ただし、すぐには送れませんでした。\n'+whyText(r)+'\n数分〜数時間後に、自動で送られます。'}
   alert(msg);sub='hist';news();
 }
 
@@ -382,24 +383,29 @@ async function pushCard(){
   let cfg={},n=0;
   try{const s=await db.doc('settings/push').get();cfg=s.exists?s.data():{}}catch(x){}
   try{n=(await col('pushsubs')).filter(x=>Object.keys(x.subs||{}).length).length}catch(x){}
-  const has=!!(await getGh());
-  box.innerHTML=`<p><span class=tag style="background:${has?'#16a34a':'#b91c1c'}">すぐ送る: ${has?'オン':'オフ'}</span>${has?'':' <b style="color:#b91c1c">オフのままだと、通知が数分〜数時間おくれたり、送られないことがあります</b>'}</p>
+  const tk=await getGh(),has=!!tk;
+  box.innerHTML=`<p><span class=tag style="background:${has?'#16a34a':'#b91c1c'}">すぐ送る: ${has?'オン':'オフ'}</span>${has?` 保存ずみのトークン: <b>${tail(tk)}</b>${GHC&&GHC.at?`(保存: ${fmt(GHC.at)})`:''}`:' <b style="color:#b91c1c">オフのままだと、通知が数分〜数時間おくれたり、送られないことがあります</b>'}</p>
    <p>通知の鍵: <b>${cfg.vapid?'作成ずみ':'まだ作っていません'}</b> / 通知をオンにしている人: <b>${n}人</b></p>
    <div class=row><button class=b onclick=makeVapid()>${cfg.vapid?'鍵を作り直す':'鍵を作る'}</button><button class="b g" onclick=pushHelp()>通知のしくみ</button></div>
    <label style="margin-top:12px">「すぐ送る」のためのGitHubトークン(1回入れれば、お知らせのたびに入れる必要はありません)</label>
-   <input id=ghk type=password placeholder="${has?'設定ずみ(変えるときだけ貼る)':'github_pat_ で始まる文字を貼る'}">
-   <div class=row><button class=b onclick=saveGh()>保存</button><button class="b g" onclick="pushKick(true)">いま送信を実行</button><button class="b g" onclick=ghHelp()>トークンの作り方</button></div>`;
+   <input id=ghk class=secret name=bribly-gh-token autocomplete=off autocapitalize=off spellcheck=false placeholder="${has?'設定ずみ(変えるときだけ貼る)':'github_pat_ で始まる文字を貼る'}">
+   <div class=row><button class=b onclick=saveGh()>保存</button><button class="b g" onclick=checkGh()>つながるか確認</button><button class="b g" onclick="pushKick(true)">いま送信を実行</button><button class="b g" onclick=ghHelp()>トークンの作り方</button></div>`;
 }
+// 保存する前に、そのトークンでGitHubにつながるか確認する(だめなら、いまのトークンは消さない)
 async function saveGh(){
   const v=$v('#ghk').trim();
-  if(!v){if(!confirm('保存ずみのトークンを削除しますか?'))return;localStorage.removeItem('bribly_gh');try{await db.doc('adminsecrets/gh').delete()}catch(x){}pushCard();return alert('削除しました')}
+  if(!v){if(!confirm('保存ずみのトークンを削除しますか?'))return;localStorage.removeItem('bribly_gh');try{await db.doc('adminsecrets/gh').delete()}catch(x){}GHC=null;pushCard();return alert('削除しました')}
+  if(!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(v))return alert('トークンの形がちがうようです。「github_pat_」で始まる長い文字を貼ってください。\n(ログインのパスワードなどが入っていないか、確認してください)');
+  const r=await ghCall('/actions/workflows/push.yml',{},v);
+  if(r.st!=200)return alert('このトークンでは、GitHubにつながりませんでした。保存していません。\n'+whyText(r)+(r.st==404?'\n(GitHubに push.yml があるか、トークンの対象リポジトリが合っているかも確認してください)':''));
   localStorage.setItem('bribly_gh',v);
   let synced=true;try{await db.doc('adminsecrets/gh').set({token:v,at:Date.now()})}catch(x){synced=false}
-  const r=await ghCall('/actions/workflows/push.yml');
   pushCard();
-  alert(r.st==200
-    ?'保存しました。GitHubにつながりました。'+(synced?'\nほかの端末でも、自動で使えます。':'\n(この端末だけで使えます。ほかの端末でも使うには、Firebaseのルールを貼り替えてください)')
-    :'保存しましたが、つながりませんでした。\n'+WHY[r.why]+(r.st==404?'\n(GitHubに push.yml があるかも確認してください)':''));
+  alert('保存しました。GitHubにつながりました。(トークン '+tail(v)+')'+(synced?'\nほかの端末でも、自動で使えます。':'\n(この端末だけで使えます。ほかの端末でも使うには、Firebaseのルールを貼り替えてください)'));
+}
+async function checkGh(){
+  const r=await ghCall('/actions/workflows/push.yml');
+  alert(r.st==200?'GitHubにつながりました。(トークン '+tail(r.tk)+')':r.why=='notoken'?WHY.notoken:'つながりませんでした。\n'+whyText(r));
 }
 // 通知の鍵を、この画面(ブラウザ)の中で作る。公開用はFirebaseに保存、秘密用は1回だけ表示する
 async function makeVapid(){
@@ -446,25 +452,29 @@ function pushHelp(){
   document.body.append(d);d.showModal();
 }
 // GitHubの送信プログラムを、いますぐ動かす(トークンがあるときだけ)
-// トークンは、一度入れると、この端末に保存され、管理者だけが読めるFirebaseにも保存される(別の端末でも自動で使える)
+// トークンは、管理者だけが読めるFirebaseに保存したものが基準(どの端末で保存しても、いちばん新しいものが使われる)。
+// Firebaseにつながらないときだけ、この端末の控えを使う
+let GHC=null;
 async function getGh(){
-  let tk=localStorage.getItem('bribly_gh');
-  if(!tk){try{const s=await db.doc('adminsecrets/gh').get();if(s.exists&&s.data().token){tk=s.data().token;localStorage.setItem('bribly_gh',tk)}}catch(x){}}
-  return tk||'';
+  try{const s=await db.doc('adminsecrets/gh').get();if(s.exists&&s.data().token){GHC={tk:s.data().token,at:s.data().at||0};localStorage.setItem('bribly_gh',GHC.tk);return GHC.tk}}catch(x){}
+  const l=localStorage.getItem('bribly_gh');GHC=l?{tk:l,at:0}:null;return l||'';
 }
-async function ghCall(path,opt={}){
-  const tk=await getGh();if(!tk)return {st:0,why:'notoken'};
+const tail=t=>t?('…'+t.slice(-4)):'';
+async function ghCall(path,opt={},tokenOverride){
+  const tk=tokenOverride||await getGh();if(!tk)return {st:0,why:'notoken',msg:'',tk:''};
   const owner=location.hostname.split('.')[0],repo=location.pathname.split('/').filter(Boolean)[0]||'';
   try{
     const r=await fetch(`https://api.github.com/repos/${owner}/${repo}${path}`,{...opt,headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json'}});
-    return {st:r.status,why:r.status==401?'expired':(r.status==403||r.status==404)?'perm':r.ok?'ok':'error'};
-  }catch(x){return {st:-1,why:'net'}}
+    let msg='';if(!r.ok){try{msg=(await r.json()).message||''}catch(x){}}
+    return {st:r.status,why:r.status==401?'expired':(r.status==403||r.status==404)?'perm':r.ok?'ok':'error',msg,tk};
+  }catch(x){return {st:-1,why:'net',msg:'',tk}}
 }
 const kick=()=>ghCall('/actions/workflows/push.yml/dispatches',{method:'POST',body:JSON.stringify({ref:'main'})});
-const WHY={ok:'',notoken:'「すぐ送る」の設定がまだありません',expired:'トークンの期限が切れているか、まちがっています',perm:'トークンの権限か、リポジトリ名が合っていません(Actionsを「Read and write」にしてください)',error:'GitHubが受け付けませんでした',net:'ネットワークにつながりませんでした'};
+const WHY={ok:'',notoken:'「すぐ送る」の設定がまだありません',expired:'トークンが無効です(期限切れ・取り消し・貼りまちがいなど)。トークンを作り直して、貼り直してください',perm:'トークンの権限か、リポジトリ名が合っていません(Actionsを「Read and write」にしてください)',error:'GitHubが受け付けませんでした',net:'ネットワークにつながりませんでした'};
+const whyText=r=>(WHY[r.why]||'')+(r.st>0?`\n(GitHubの返事: ${r.st} ${r.msg||''} / 使ったトークン: ${tail(r.tk)})`:'');
 async function pushKick(show){
   const r=await kick(),ok=r.st==204;
-  if(show)alert(ok?'送信を始めました。1分ほどで届きます。':'始められませんでした。\n'+WHY[r.why]);
+  if(show)alert(ok?'送信を始めました。1分ほどで届きます。':'始められませんでした。\n'+whyText(r));
   return ok;
 }
 async function ghStatus(){
