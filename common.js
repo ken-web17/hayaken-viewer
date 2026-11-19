@@ -1,5 +1,5 @@
 // 共通部品。★バージョンはここだけ書き換えればOK(Claudeが更新のたびに変更します)
-const APP_VERSION='3.4.6',APP_DATE='2026-11-10';
+const APP_VERSION='3.4.7',APP_DATE='2026-11-10';
 const $=s=>document.querySelector(s),$v=s=>$(s).value;
 const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('ja-JP');
@@ -56,7 +56,7 @@ let PDFID=null;
 async function getPdf(id,key){ // key を渡すと、同じものを何度も読み込まずに使い回す
   if(key&&PDFDOC&&PDFID===key)return PDFDOC;
   await loadLib('pdfjs');
-  const d=await pdfjsLib.getDocument({data:b64ToU8(await getBlob64(id)),cMapUrl:PC,cMapPacked:true}).promise;
+  const d=await pdfjsLib.getDocument({data:b64ToU8(await getBlob64(id)),cMapUrl:PC,cMapPacked:true,isEvalSupported:false}).promise; // pdf.jsの既知の脆弱性(CVE-2024-4367)への回避策
   PDFDOC=d;PDFID=key||null;return d;
 }
 async function renderPdf(id,box,wm){
