@@ -47,8 +47,8 @@ html,body{overscroll-behavior:none}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.5.0"></script>
-<script src="legal.js?v=3.5.0"></script>
+<script src="common.js?v=3.5.1"></script>
+<script src="legal.js?v=3.5.1"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -313,7 +313,7 @@ const need=x=>!x.handled&&((x.type=='contact'&&x.wantReply)||x.type=='reset'||(x
 const FL=[['all','すべて'],['access','閲覧リクエスト'],['contact','連絡・相談'],['reset','パスワード再設定'],['signup','新規登録'],['withdraw','退会']];
 const TN={access:'閲覧リクエスト',signup:'新規登録',contact:'連絡・相談',withdraw:'退会',reset:'パスワード再設定の申請',reset_done:'パスワード再設定の完了'};
 async function news(pre){
-  pre=pre||NEXTPRE;NEXTPRE=null;
+  pre=pre||NEXTPRE||undefined;NEXTPRE=null;
   users=await col('users');
   if(sub=='send')return compose(pre);
   if(sub=='hist'){
@@ -372,7 +372,7 @@ async function apv(i,ok){
   b.update(db.doc('requests/'+x.id),{status:ok?'approved':'denied',decidedAt:Date.now()});
   await b.commit();news();
 }
-function compose(p={}){
+function compose(p){p=p||{};
   const to=p.to||[],all=to.includes('all'),fut=p.to?(all||!!p.future):true,psh=p.id?(p.push===true&&p.pushed===false):true;
   $('#m').innerHTML=subBar()+`<div class=card id=cmp data-rt="${e(p.replyTo||'')}"><h3>${p.id?'お知らせを編集':'お知らせを送付'}</h3>
   <label>件名</label><input id=sj value="${e(p.subject)}">
