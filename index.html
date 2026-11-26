@@ -139,14 +139,18 @@ html.deadbot,html.deadbot body{background:#fff}
 html.deadbot nav{padding-bottom:8px}
 html.deadbot .vdock{padding-bottom:6px}
 html.deadbot .fab{bottom:14px}
+.it{position:relative}
+.rdot{position:absolute;width:11px;height:11px;border-radius:50%;background:#dc2626;box-shadow:0 0 0 2px #fff}
+.it .rdot{left:2px;top:50%;transform:translateY(-50%)}
+.tile .rdot{top:10px;left:10px}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.7"></script>
-<script src="legal.js?v=3.4.7"></script>
+<script src="common.js?v=3.5.0"></script>
+<script src="legal.js?v=3.5.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -333,7 +337,15 @@ const visible=x=>lvl(x)!='n'||(x.type=='folder'&&items.some(c=>c.parent==x.id&&v
 const byOrd=(a,b)=>(a.order??1e9)-(b.order??1e9)||(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||a.name.localeCompare(b.name);
 let NM={},SEEN; // SEEN: お知らせを最後に見た日時 // ペン・付箋を最後に書いた日時(自分用)
 async function loadItems(){items=(await db.collection('items').get()).docs.map(d=>({id:d.id,...d.data()}))}
-async function loadMeta(){try{const s=await db.doc('nmeta/'+PID).get();NM=s.exists?(s.data().m||{}):{};SEEN=s.exists&&s.data().seenNews!=null?s.data().seenNews:null;TUTSEEN=s.exists&&!!s.data().tut}catch(x){NM={};SEEN=null}}
+// 「新しいファイル」の目印: nbase=最初に開いた日時(それ以前からあるものは「新しい」にしない) / fseen=フォルダを押した日時 / fopen=開いたファイル
+let NB=0,FSEEN={},FOPEN={};
+async function loadMeta(){
+  try{
+    const s=await db.doc('nmeta/'+PID).get(),d=s.exists?s.data():{};
+    NM=d.m||{};SEEN=d.seenNews!=null?d.seenNews:null;TUTSEEN=!!d.tut;FSEEN=d.fseen||{};FOPEN=d.fopen||{};NB=d.nbase||0;
+    if(!NB){NB=Date.now();db.doc('nmeta/'+PID).set({nbase:NB},{merge:true}).catch(()=>{})}
+  }catch(x){NM={};SEEN=null}
+}
 async function checkNews(){
   try{
     if(SEEN===undefined)await loadMeta();
@@ -358,7 +370,14 @@ async function shelf(){
   drawShelf();
 }
 const crumb=x=>{const a=[];let p=items.find(i=>i.id==x.parent);while(p){a.unshift(p.name);p=items.find(i=>i.id==p.parent)}return a.join(' / ')};
-function goFolder(id){const a=[];let p=items.find(i=>i.id==id);while(p){a.unshift(p.id);p=items.find(i=>i.id==p.parent)}path=a;SQ.q='';SQ.g='';drawShelf()}
+// 新しいファイルの赤丸: ファイルは、開くまで。フォルダは、中(下のフォルダも含む)に新しいファイルがあるあいだ、押すまで
+const descFiles=id=>items.filter(c=>c.parent==id).flatMap(c=>c.type=='folder'?descFiles(c.id):[c]);
+const isNewFile=x=>NB>0&&x.type!='folder'&&(x.createdAt||0)>NB&&!FOPEN[x.id];
+const hasNew=f=>{const s=FSEEN[f.id]||0;return descFiles(f.id).some(c=>isNewFile(c)&&visible(c)&&!(days(c.expiry)<0)&&(c.createdAt||0)>s)};
+const dotFor=x=>x.type=='folder'?hasNew(x):isNewFile(x);
+function markFolder(id){FSEEN[id]=Date.now();db.doc('nmeta/'+PID).set({fseen:{[id]:FSEEN[id]}},{merge:true}).catch(()=>{})}
+function markOpened(id){FOPEN[id]=true;db.doc('nmeta/'+PID).set({fopen:{[id]:true}},{merge:true}).catch(()=>{})}
+function goFolder(id){const f0=items.find(i=>i.id==id);if(f0&&hasNew(f0))markFolder(id);const a=[];let p=items.find(i=>i.id==id);while(p){a.unshift(p.id);p=items.find(i=>i.id==p.parent)}path=a;SQ.q='';SQ.g='';drawShelf()}
 const toTop=()=>{const w=document.querySelector('.mwrap');if(w)w.scrollTop=0};
 function drawShelf(){toTop();
   const parent=path[path.length-1]||'',pf=items.find(x=>x.id==parent);
@@ -379,8 +398,8 @@ function drawList(){
   const cmp={cd:(a,b)=>(b.createdAt||0)-(a.createdAt||0),ca:(a,b)=>(a.createdAt||0)-(b.createdAt||0),ud:(a,b)=>(NM[b.id]||0)-(NM[a.id]||0),ua:(a,b)=>(NM[a.id]||0)-(NM[b.id]||0)}[SQ.s];
   list.sort(cmp?((a,b)=>(a.type=='folder'?0:1)-(b.type=='folder'?0:1)||cmp(a,b)):byOrd);
   const go=x=>x.type=='folder'?`goFolder('${x.id}')`:`cur='${x.id}';openFile('${x.id}')`;
-  const row=x=>`<div class=it onclick="${go(x)}">${icon(x)}<div style="flex:1;min-width:0"><b>${e(x.name)}</b>${gchip(x)}${meta(x)}${flat&&crumb(x)?`<div class=s>${e(crumb(x))}</div>`:''}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`;
-  const tile=x=>{const d=days(x.expiry);return `<div class=tile onclick="${go(x)}">${icon(x)}<b>${e(x.name)}</b>${gchip(x)||'<span class=gc style="background:none">&nbsp;</span>'}${d!==null?`<span class="s ${d<=7?'red':''}">あと${d}日</span>`:''}${lvl(x)=='p'?`<span class="lk tl">${LOCK}</span>`:''}</div>`};
+  const row=x=>`<div class=it onclick="${go(x)}">${dotFor(x)?'<span class=rdot></span>':''}${icon(x)}<div style="flex:1;min-width:0"><b>${e(x.name)}</b>${gchip(x)}${meta(x)}${flat&&crumb(x)?`<div class=s>${e(crumb(x))}</div>`:''}${lvl(x)=='p'?'<div class=s style="color:#b45309">プレビューのみ</div>':''}</div>${lvl(x)=='p'?`<span class=lk>${LOCK}</span>`:''}</div>`;
+  const tile=x=>{const d=days(x.expiry);return `<div class=tile onclick="${go(x)}">${dotFor(x)?'<span class=rdot></span>':''}${icon(x)}<b>${e(x.name)}</b>${gchip(x)||'<span class=gc style="background:none">&nbsp;</span>'}${d!==null?`<span class="s ${d<=7?'red':''}">あと${d}日</span>`:''}${lvl(x)=='p'?`<span class="lk tl">${LOCK}</span>`:''}</div>`};
   $('#slist').innerHTML=list.length?(VIEW()=='tile'?`<div class=tiles>${list.map(tile).join('')}</div>`:list.map(row).join('')):`<p class=s>${flat?'見つかりません':'まだ何もありません'}</p>`;
 }
 
@@ -391,6 +410,7 @@ async function openFile(id){
   if(!it){cur=null;return drawShelf()}
   if(lvl(it)=='p')return openLocked(it);
   if(lvl(it)=='n'){cur=null;return drawShelf()}
+  if(isNewFile(it))markOpened(id);
   $('#m').innerHTML=`<button class="b g ib" onclick="cur=null;drawShelf()">${IC(I.back,18)}</button><h2>${e(it.name)}</h2>${it.type=='pdf'&&it.body?`<p class=subt>${e(it.body)}</p>`:''}<div class=mrow>${gchip(it)}${meta(it)}</div>
    ${it.type=='pdf'?`<button class="b big openb" onclick="openViewer('${id}')">${IC(I.open,22)}<span>ひらく</span></button><div id=thumbs class="thumbs nosel"><p class=s style="grid-column:1/-1">読み込み中…</p></div>`:`<div class=card style="white-space:pre-wrap">${e(it.body)}</div>`}
    <p><button class="b g mini" onclick="$('#vh').hidden=!$('#vh').hidden">バージョン履歴</button></p>

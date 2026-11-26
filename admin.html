@@ -47,8 +47,8 @@ html,body{overscroll-behavior:none}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.4.7"></script>
-<script src="legal.js?v=3.4.7"></script>
+<script src="common.js?v=3.5.0"></script>
+<script src="legal.js?v=3.5.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#b91c1c;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -187,7 +187,7 @@ async function mkPdfs(){
   const o=await ask('PDFをアップロード',[{t:'multi'},{l:'有効期限(共通・空欄で無期限)',n:'ex',t:'date',v:''},{l:'本文(共通・PDFの下に表示)',n:'bd',t:'area',v:''},{t:'genre',v:''},{t:'acc',v:{to:['all'],pv:[]},nopv:false}]);
   if(!o)return;
   const fl=(o.filesAll||[]).filter(f=>f.size);if(!fl.length)return alert('PDFを選んでください');
-  let ok=0;const skip=[];
+  let ok=0;const skip=[],okNames=[];
   for(let i=0;i<fl.length;i++){
     const f=fl[i],nm=(o['nm_'+i]||'').trim()||f.name.replace(/\.pdf$/i,'');
     if(f.size>7*1024*1024){skip.push(nm+'(7MB超)');continue}
@@ -197,12 +197,33 @@ async function mkPdfs(){
       const ref=db.collection('items').doc(),b=db.batch(),b64=await rd(f);
       await putBlob(ref.id,b64);
       b.set(ref,{parent:cur,type:'pdf',name:nm,expiry:o['ex_'+i]||o.ex,body:o['bd_'+i]||o.bd,genre:gv(o,'f'+i+'_')||gv(o,''),to:o.to,pv:o.pv||[],version:1,history:[{v:1,at:Date.now()}],createdAt:Date.now()+i});
-      await b.commit();items.push({id:ref.id,parent:cur,type:'pdf',name:nm});ok++;
+      await b.commit();items.push({id:ref.id,parent:cur,type:'pdf',name:nm});ok++;okNames.push(nm);
       try{await mkPreview(ref.id,b64)}catch(x){}
     }catch(x){skip.push(nm+'(失敗)')}
   }
-  alert(ok+'件アップロードしました'+(skip.length?'\n\nアップロードしなかったもの:\n'+skip.join('\n'):''));
+  const pn=path.map(id=>items.find(x=>x.id==id)?.name).filter(Boolean);
+  const toList=(o.to.includes('all')||(o.pv||[]).includes('all'))?['all']:[...new Set([...o.to,...(o.pv||[])])];
   shelf();
+  if(!ok)return alert('アップロードできたものはありません'+(skip.length?'\n\nアップロードしなかったもの:\n'+skip.join('\n'):''));
+  uploadDone(okNames,skip,pn,toList);
+}
+/* アップロードが終わったあと: 「追加のお知らせ」を、内容を入れた状態で作れる */
+let NEXTPRE=null;
+const FOOT='--------------------------------------------\nBribly 運営\n「マイページ」→「通知の設定」でオンになっている場合、このメッセージは通知が送信されています。';
+function addMsgPre(names,pn,to){
+  const where=pn.length?pn.map(n=>`「${n}」`).join('→'):'「本棚」';
+  const subject='教材追加：'+(names.length==1?names[0]:names.length==2?names.join('、'):`${names[0]} ほか${names.length-1}件`);
+  const head=names.length<=3?`${names.join('、')}を${where}内に追加しました。`:`次の${names.length}件を${where}内に追加しました。\n${names.map(n=>'・'+n).join('\n')}`;
+  return {genre:'教材について(追加)',subject,body:`${head}\nご確認ください。\n\n${FOOT}`,to};
+}
+function uploadDone(names,skip,pn,to){
+  const d=document.createElement('dialog');
+  d.innerHTML=`<h3>${names.length}件アップロードしました</h3>${skip.length?`<p class=s>アップロードしなかったもの:<br>${skip.map(e).join('<br>')}</p>`:''}
+   <p class=s>利用者に、追加のお知らせを送りますか?(押すと、教材名や保存先が入った送付画面が開きます。送るのは、画面を確認してからです)</p>
+   <button class="b big" id=dmsg>追加完了メッセージを送信</button><button class="b g big" id=dcl>閉じる</button>`;
+  d.querySelector('#dcl').onclick=()=>d.remove();
+  d.querySelector('#dmsg').onclick=()=>{d.remove();NEXTPRE=addMsgPre(names,pn,to);tab='news';sub='send';render()};
+  document.body.append(d);d.showModal();
 }
 async function mk(type){
   if(type=='pdf')return mkPdfs();
@@ -292,6 +313,7 @@ const need=x=>!x.handled&&((x.type=='contact'&&x.wantReply)||x.type=='reset'||(x
 const FL=[['all','すべて'],['access','閲覧リクエスト'],['contact','連絡・相談'],['reset','パスワード再設定'],['signup','新規登録'],['withdraw','退会']];
 const TN={access:'閲覧リクエスト',signup:'新規登録',contact:'連絡・相談',withdraw:'退会',reset:'パスワード再設定の申請',reset_done:'パスワード再設定の完了'};
 async function news(pre){
+  pre=pre||NEXTPRE;NEXTPRE=null;
   users=await col('users');
   if(sub=='send')return compose(pre);
   if(sub=='hist'){
