@@ -143,14 +143,20 @@ html.deadbot .fab{bottom:14px}
 .rdot{position:absolute;width:11px;height:11px;border-radius:50%;background:#dc2626;box-shadow:0 0 0 2px #fff}
 .it .rdot{left:2px;top:50%;transform:translateY(-50%)}
 .tile .rdot{top:10px;left:10px}
+.stp{display:flex;align-items:center;gap:6px;margin:6px 0 14px}.sa{color:#94a3b8;display:flex}
+.sp{flex:1;display:flex;align-items:center;gap:8px;padding:10px;border-radius:12px;background:#e2e8f0;color:#64748b;font-size:13px;font-weight:700;line-height:1.3}
+.sp b{width:24px;height:24px;border-radius:50%;background:#cbd5e1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.sp.on{background:#dbeafe;color:#1d4ed8}.sp.on b{background:#1d4ed8}
+.sp.done{background:#dcfce7;color:#166534}.sp.done b{background:#16a34a}
+.wcard{display:flex;gap:12px;align-items:center;background:#f1f5f9;border-radius:14px;padding:12px;margin:4px 0 10px;font-size:14px;line-height:1.6}.wcard svg{flex:none}
 </style></head><body>
 <div id="app"></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="common.js?v=3.5.1"></script>
-<script src="legal.js?v=3.5.1"></script>
+<script src="common.js?v=3.6.0"></script>
+<script src="legal.js?v=3.6.0"></script>
 <script>
 function fixReload(){Promise.resolve(typeof auth!='undefined'&&auth.signOut()).finally(()=>location.reload())}
 window.onerror=m=>{document.body.insertAdjacentHTML('afterbegin','<div style="color:#dc2626;padding:14px;white-space:pre-wrap;font:14px sans-serif">エラー: '+String(m)+'\n\nCtrl+Shift+R で再読み込みしても直らないときは、このメッセージを開発者に伝えてください。\n<button onclick="fixReload()" style="margin-top:8px;padding:8px 14px">ログアウトして再読み込み</button></div>')};
@@ -185,7 +191,7 @@ async function doLogin(){
 }
 
 /* ---------- パスワードを忘れたとき ---------- */
-function resetView(mode='req'){show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>パスワードを忘れたとき</h1>
+function resetView(mode='req'){if(GATE())return gateScreen();show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>パスワードを忘れたとき</h1>
 <div class=two style="margin:10px 0 16px"><button class="b ${mode=='req'?'':'g'}" onclick="resetView('req')">1. 申請する</button><button class="b ${mode=='code'?'':'g'}" onclick="resetView('code')">2. コードを入力</button></div>
 ${mode=='req'?`<p class=sub>学籍番号を入力して申請すると、管理者(はやけん)に届きます。本人確認のあと、リセット用のコード(8桁)を教えてもらえます。申請したあとは、画面を閉じても大丈夫です。</p>
 <label>学籍番号</label><input id=rs><p id=er class=err></p><button class="b big" onclick=reqReset()>申請する</button>`:
@@ -229,7 +235,7 @@ async function doReset(){
 }
 
 /* ---------- 新規登録 ---------- */
-function regView(){LR={};show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>${GATE()?'<p class=s style="margin:-6px 0 10px">登録したあとは、ホーム画面に追加して使います。</p>':''}
+function regView(){if(GATE())return gateScreen();LR={};show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}<h1 class=lg>新規登録</h1><p class=sub>すべて必須です</p>${GATE()?'<p class=s style="margin:-6px 0 10px">登録したあとは、ホーム画面に追加して使います。</p>':''}
 <div class=two><div><label>姓</label><input id=ln></div><div><label>名</label><input id=fn></div></div>
 <label>学籍番号(ログインIDになります)</label><input id=sid>
 <label>パスワード</label><input id=p1 type=password><p class=s style="margin:-8px 0 12px">${PWMSG}</p>
@@ -267,7 +273,7 @@ async function doReg(){
     b.set(db.collection('inbox').doc(),{type:'signup',uid,name:ln+' '+fn,sid,serial:sc,at:Date.now()});
     await b.commit();
   }catch(x){await c.user.delete();busy=false;bt.disabled=false;return err('シリアルコードが無効か、すでに使われています')}
-  busy=false;FIRST=true;await boot(c.user);showTutorial();
+  busy=false;FIRST=true;await boot(c.user);if(!needFirstRun())showTutorial();
 }
 auth.onAuthStateChanged(u=>{if(busy)return;u?boot(u):loginView()});
 async function boot(u){
@@ -317,7 +323,7 @@ const I={close:'M6 6l12 12M18 6L6 18',back:'M15 5l-7 7 7 7',check:'M5 12l5 5 9-1
  fs:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',fsx:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',dl:'M12 4v11M7 11l5 5 5-5M5 20h14',
  sync:'M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4',list:'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
  search:'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',sliders:'M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4',open:'M5 12h14M13 6l6 6-6 6'};
-Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8',copy:'M9 9h11v11H9zM5 15H4V4h11v1',bell:'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0'});
+Object.assign(I,{share:'M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1',addhome:'M4 4h16v16H4zM12 8v8M8 12h8',copy:'M9 9h11v11H9zM5 15H4V4h11v1',bell:'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0',compass:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM15.5 8.5l-2 5-5 2 2-5z'});
 let _tt=null;
 function toast(h,sticky){let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';document.body.append(t)}t.innerHTML=h;t.hidden=false;clearTimeout(_tt);if(!sticky)_tt=setTimeout(()=>t.hidden=true,2200)}
 
@@ -757,21 +763,21 @@ function copyUrl(){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(u).then(done).catch(fb);else fb();
 }
 function gateScreen(){
-  const app=uaApp(),msg=GATEMSG,url=location.origin+location.pathname;GATEMSG='';
-  const safari=`<div class=step><span class=ico>${IC(I.share,28)}</span><div><span class=n>1</span>Safariの<b>「共有」ボタン</b>(□に↑)を押す<br><span class=s>見当たらないときは、画面の「…」または「≡」(三本線)のメニューから「共有」を選びます</span></div></div>
-   <div class=step><span class=ico>${IC(I.addhome,28)}</span><div><span class=n>2</span>メニューを下にずらして<b>「ホーム画面に追加」</b>を押す</div></div>
-   <div class=step><span class=ico style="font-weight:800;font-size:15px">追加</span><div><span class=n>3</span>右上の<b>「追加」</b>を押す</div></div>`;
-  const other=`<div class=step><span class=ico>${IC(I.copy,28)}</span><div><span class=n>1</span>下の<b>「URLをコピー」</b>を押す</div></div>
-   <div class=step><span class=ico style="font-weight:800;font-size:12px">Safari</span><div><span class=n>2</span><b>Safari</b>を開いて、アドレス欄に<b>はりつけて</b>開く</div></div>
-   <div class=step><span class=ico>${IC(I.share,28)}</span><div><span class=n>3</span>Safariの<b>「共有」ボタン</b>(または「…」「≡」)→<b>「ホーム画面に追加」</b>→<b>「追加」</b></div></div>
-   <input id=gurl readonly value="${e(url)}" onclick="this.select()"><button id=cpb class="b big" onclick=copyUrl()>URLをコピー</button>`;
-  show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}
-   ${msg?`<p class=okmsg>${e(msg)}</p>`:''}
-   <h3 style="margin:6px 0 4px">ホーム画面に追加して使います</h3>
-   <p class=s style="margin:0 0 4px">iPhone・iPadでは、ホーム画面に追加した「Bribly」のアイコンから使います。${app?`いま開いている「${e(app)}」では追加できないため、Safariで開き直してください。`:''}</p>
-   ${app?other:safari}
-   <div class=note>ホーム画面のアプリを開いたら、<b>もう一度ログイン</b>してください(ブラウザとは保存場所が別のためです)。</div>
-   ${msg?'':'<div class=or>はじめての方</div><button class="b g big" onclick=regView()>新規登録(ここからできます)</button>'}</div></div>`);
+  const app=uaApp(),url=location.origin+location.pathname,safari=!app;
+  GATEMSG='';
+  const stp=`<div class=stp><div class="sp ${safari?'done':'on'}"><b>${safari?IC(I.check,14,3):'1'}</b><span>Safariで開く</span></div><span class=sa>${IC('M9 6l6 6-6 6',18)}</span><div class="sp ${safari?'on':''}"><b>2</b><span>ホーム画面へ追加</span></div></div>`;
+  const card=safari
+    ?`<div class=wcard>${logoSvg(56)}<div><b>Briblyアプリを、ホーム画面に追加しましょう!</b><br>新規登録やログインは、追加したアプリからできます。</div></div>`
+    :`<div class=wcard>${logoSvg(56)}<div><b>Briblyアプリを入れるため、Safariでこのページを開いてください。</b><br>いま開いている「${e(app)}」では使えません。新規登録も、ホーム画面のアプリからできます。</div></div>`;
+  const steps=safari
+    ?`<div class=step><span class=ico>${IC(I.share,28)}</span><div><span class=n>1</span><b>「共有」ボタン</b>(□に↑)を押す<br><span class=s>見当たらないときは、「…」または「≡」(三本線)のメニューの中に、共有があることがあります</span></div></div>
+      <div class=step><span class=ico>${IC(I.addhome,28)}</span><div><span class=n>2</span>下にずらして<b>「ホーム画面に追加」</b>を押し、右上の<b>「追加」</b>を押して、追加完了</div></div>
+      <div class=step><span class=ico>${IC(I.check,28)}</span><div><span class=n>3</span>ホーム画面の<b>Briblyのアイコン</b>を開いて、Briblyを楽しみましょう!</div></div>`
+    :`<div class=step><span class=ico>${IC(I.copy,28)}</span><div><span class=n>1</span>下のURLをコピーする</div></div>
+      <input id=gurl readonly value="${e(url)}" onclick="this.select()"><button id=cpb class="b big" onclick=copyUrl()>URLをコピー</button>
+      <div class=step><span class=ico>${IC(I.compass,28)}</span><div><span class=n>2</span><b>Safari</b>を開いて、アドレス欄に貼りつけて、ひらきます</div></div>`;
+  show(`<div class=auth><div class=box>${brandHtml('#1d4ed8','#fff',1)}${stp}<h2 style="text-align:center;margin:4px 0 8px">Briblyへようこそ</h2>${card}${steps}
+   <div class=note>ホーム画面のアプリは、ブラウザとは保存場所が別です。アプリを開いたら、そこで<b>新規登録かログイン</b>をしてください。</div></div></div>`);
 }
 
 /* ---------- 通知(スマホのポップアップ)の設定と登録 ----------
